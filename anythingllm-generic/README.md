@@ -106,34 +106,6 @@ The openshift-infra repo can also be used standalone for infrastructure provisio
 
 ## Troubleshooting
 
-## Troubleshooting
-
-**ArgoCD sync timeout error?**
-
-If you see "one or more synchronization tasks are not valid due to application controller sync timeout":
-
-1. Check if the cluster-info-discovery job is stuck:
-```bash
-oc get job cluster-info-discovery -n openshift-machine-api
-oc describe job cluster-info-discovery -n openshift-machine-api
-```
-
-2. If the job shows "FailedCreate" errors about missing ServiceAccount, the sync wave ordering needs to be fixed in the source repository. The fix ensures:
-   - Wave -2: ServiceAccount and RBAC resources (created first)
-   - Wave -1: cluster-info-discovery Job (runs after RBAC is ready)
-   - Wave 0+: Other infrastructure components
-
-3. Check ArgoCD application status:
-```bash
-oc get application anythingllm-complete -n openshift-gitops -o jsonpath='{.status.operationState}'
-```
-
-4. If sync is stuck, you can delete and recreate the application:
-```bash
-oc delete application anythingllm-complete -n openshift-gitops
-oc apply -f gitops/anythingllm-complete.yaml
-```
-
 **Nodes not ready?**
 ```bash
 # Check GPU nodes
