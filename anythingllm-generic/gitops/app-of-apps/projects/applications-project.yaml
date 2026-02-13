@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: rhoai-applications
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: rhoai-demos
+spec:
+  description: Demo applications and their dependencies (ESO, AnythingLLM)
+  
+  # Allow applications to deploy to any namespace
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  
+  # Allow pulling from these Git repositories
+  sourceRepos:
+    - https://github.com/dandawg/rhoai-anythingllm-demos.git
+    - https://github.com/dandawg/anythingllm-on-ocp.git
+  
+  # Allow all resource types (ESO needs cluster-wide resources)
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Namespace resource whitelist
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

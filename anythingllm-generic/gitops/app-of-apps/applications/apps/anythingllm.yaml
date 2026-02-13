@@ -1,0 +1,83 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anythingllm
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: anythingllm
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: rhoai-applications
+  
+  source:
+    repoURL: https://github.com/dandawg/anythingllm-on-ocp.git
+    targetRevision: main
+    path: helm
+    helm:
+      valueFiles:
+        - values-rhoai.yaml
+      values: |
+        # Override with complete deployment values
+        namespace: demo-apps
+        
+        env:
+          - name: LLM_PROVIDER
+            value: "generic-openai"
+          - name: GENERIC_OPEN_AI_BASE_PATH
+            value: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+          - name: GENERIC_OPEN_AI_MODEL_PREF
+            value: "qwen3-vl-8b"
+          - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
+            value: "30000"
+          - name: GENERIC_OPEN_AI_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: model-api-tokens
+                key: GENERIC_OPEN_AI_API_KEY
+          - name: EMBEDDING_ENGINE
+            value: "generic-openai"
+          - name: EMBEDDING_BASE_PATH
+            value: "http://qwen3-vl-embedding-2b-predictor.demo.svc.cluster.local:8080/v1"
+          - name: EMBEDDING_MODEL_PREF
+            value: "qwen3-vl-embedding-2b"
+          - name: GENERIC_OPEN_AI_EMBEDDING_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: model-api-tokens
+                key: GENERIC_OPEN_AI_EMBEDDING_API_KEY
+          - name: VECTOR_DB
+            value: "lancedb"
+          - name: DISABLE_TELEMETRY
+            value: "true"
+          - name: NODE_TLS_REJECT_UNAUTHORIZED
+            value: "0"
+        
+        envFrom:
+          - secretRef:
+              name: model-api-tokens
+        
+        storage:
+          size: 20Gi
+          storageClassName: ""
+        
+        chromadb:
+          enabled: false
+  
+  destination:
+    server: https://kubernetes.default.svc
+  
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m

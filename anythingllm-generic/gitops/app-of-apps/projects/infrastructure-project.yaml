@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: rhoai-infrastructure
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: rhoai-demos
+spec:
+  description: Infrastructure components for RHOAI demos (cluster discovery, machinesets, GPU operators)
+  
+  # Allow applications to deploy to any namespace
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  
+  # Allow pulling from these Git repositories
+  sourceRepos:
+    - https://github.com/dandawg/openshift-infra.git
+    - https://github.com/dandawg/rhoai-deploy.git
+    - https://github.com/dandawg/rhoai-anythingllm-demos.git
+  
+  # Allow all resource types (infrastructure needs cluster-wide resources)
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Namespace resource whitelist
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

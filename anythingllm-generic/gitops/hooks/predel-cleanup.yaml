@@ -1,0 +1,100 @@
+---
+# =============================================================================
+# ArgoCD PreDelete Hook - Automatic API Service Cleanup
+# =============================================================================
+# Problem: When deleting ArgoCD applications with operators (Kueue, NFD, etc.),
+#          their API services may remain orphaned with Available=False status.
+#          This blocks namespace deletion and causes the app to hang.
+#
+# Solution: This PreDelete hook automatically detects and removes failed API
+#           services BEFORE ArgoCD starts deleting resources.
+#
+# Example: v1beta1.visibility.kueue.x-k8s.io is created by Kueue operator but
+#          not cleaned up properly on deletion, causing openshift-kueue-operator
+#          namespace to hang in Terminating state.
+#
+# Usage: Runs automatically when you delete the ArgoCD application.
+#        No manual intervention needed.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-predel-cleanup
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-predel-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+rules:
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-predel-cleanup
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: argocd-predel-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: argocd-predel-cleanup
+    namespace: openshift-gitops
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: argocd-predel-cleanup
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: argocd-predel-cleanup
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Cleaning up failed API services..."
+              
+              # Get all API services with Available=False status
+              FAILED_APIS=$(oc get apiservices -o json | \
+                jq -r '.items[] | select(.status.conditions[]? | select(.type=="Available" and .status=="False")) | .metadata.name')
+              
+              if [ -n "$FAILED_APIS" ]; then
+                echo "Found failed API services:"
+                echo "$FAILED_APIS"
+                
+                for api in $FAILED_APIS; do
+                  echo "Deleting API service: $api"
+                  oc delete apiservice "$api" --ignore-not-found=true || true
+                done
+                
+                echo "Cleanup complete. Waiting 5s for propagation..."
+                sleep 5
+              else
+                echo "No failed API services found."
+              fi
+              
+              echo "PreDelete hook completed successfully."
+  backoffLimit: 2

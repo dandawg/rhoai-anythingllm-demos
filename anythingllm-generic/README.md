@@ -34,9 +34,31 @@ cd anythingllm-generic
 
 ## Installation
 
+### Option 1: App of Apps Pattern (Recommended)
+
+Deploy using the App of Apps pattern for better organization and control:
+
+```bash
+oc apply -f gitops/anythingllm-bootstrap.yaml
+```
+
+**Benefits:**
+- Applications grouped by ArgoCD Projects (infrastructure, platform, models, applications)
+- Better UI organization in ArgoCD
+- Delete resources by logical groups
+- Same one-click deployment experience
+
+See [App of Apps README](gitops/app-of-apps/README.md) for detailed documentation.
+
+### Option 2: Monolithic Application
+
+Deploy as a single monolithic application:
+
 ```bash
 oc apply -f gitops/anythingllm-complete.yaml
 ```
+
+This deploys everything in one ArgoCD Application (original approach).
 
 ## Monitoring Deployment
 
@@ -146,6 +168,47 @@ oc describe externalsecret model-api-tokens -n demo-apps
 
 ## Cleanup
 
+### If using App of Apps pattern:
+
+```bash
+oc delete application anythingllm-bootstrap -n openshift-gitops
+```
+
+This will cascade delete all child applications and their resources.
+
+### If using monolithic application:
+
 ```bash
 oc delete application anythingllm-complete -n openshift-gitops
+```
+
+Both approaches include a PreDelete hook that automatically cleans up orphaned API services to prevent hanging deletions.
+
+### Troubleshooting Deletion Issues
+
+**Application stuck deleting?**
+
+Check for orphaned API services:
+```bash
+oc get apiservices | grep False
+```
+
+The most common culprit is `v1beta1.visibility.kueue.x-k8s.io` from the Kueue operator. If the PreDelete hook didn't run or failed:
+
+```bash
+# Manually delete the failed API service
+oc delete apiservice v1beta1.visibility.kueue.x-k8s.io
+
+# Remove ArgoCD finalizer if still stuck
+oc patch application anythingllm-complete -n openshift-gitops \
+  -p '{"metadata":{"finalizers":null}}' --type=merge
+```
+
+**Namespace stuck in Terminating?**
+```bash
+# Check what's blocking it
+oc get namespace <namespace> -o json | jq '.status.conditions'
+
+# Force cleanup if needed
+oc patch namespace <namespace> -p '{"metadata":{"finalizers":[]}}' --type=merge
 ```

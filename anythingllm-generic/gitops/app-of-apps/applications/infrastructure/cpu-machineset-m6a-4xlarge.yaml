@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cpu-machineset-m6a-4xlarge
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: cpu-machineset-m6a-4xlarge
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: rhoai-infrastructure
+  
+  source:
+    repoURL: https://github.com/dandawg/openshift-infra.git
+    targetRevision: main
+    path: infra/cpu-machineset/aws/helm
+    helm:
+      valueFiles:
+        - values-m6a-4xlarge.yaml
+      # Note: Cluster info must be manually set after cluster-discovery job runs
+      # or use ArgoCD 2.6+ variable substitution
+  
+  destination:
+    server: https://kubernetes.default.svc
+  
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+  
+  ignoreDifferences:
+    - group: machine.openshift.io
+      kind: MachineSet
+      jsonPointers:
+        - /spec/replicas
+        - /spec/template/spec/providerSpec/value/blockDevices/0/ebs/volumeSize

@@ -10,6 +10,13 @@ spec:
   project: default
   
   sources:
+    # PreDelete Hook: Prevents hanging deletions caused by orphaned API services
+    # (e.g., v1beta1.visibility.kueue.x-k8s.io from Kueue operator)
+    # See hooks/predel-cleanup.yaml for details
+    - repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+      targetRevision: main
+      path: anythingllm-generic/gitops/hooks
+    
     # Wave 0: Cluster Discovery Job
     - repoURL: https://github.com/dandawg/openshift-infra.git
       targetRevision: main
@@ -175,12 +182,14 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
+      # Delete operator namespaces directly to trigger cascade deletion
+      - RespectIgnoreDifferences=true
     retry:
-      limit: 15
+      limit: 5
       backoff:
         duration: 30s
         factor: 2
-        maxDuration: 15m
+        maxDuration: 10m
   
   # Ignore expected differences for operator-managed resources
   ignoreDifferences:
@@ -215,4 +224,13 @@ spec:
         - /spec/containers/0/env
         - /metadata/annotations
         - /metadata/labels
+        - /status
+    # Ignore External Secrets Operator managed fields
+    - group: external-secrets.io
+      kind: ExternalSecret
+      jsonPointers:
+        - /status
+    - group: external-secrets.io
+      kind: ClusterSecretStore
+      jsonPointers:
         - /status
