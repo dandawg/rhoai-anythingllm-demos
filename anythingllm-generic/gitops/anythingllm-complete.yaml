@@ -1,0 +1,193 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anythingllm-complete
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: anythingllm-complete
+    app.kubernetes.io/part-of: rhoai-demos
+spec:
+  project: default
+  
+  sources:
+    # Wave 0: Cluster Discovery Job
+    - repoURL: https://github.com/dandawg/openshift-infra.git
+      targetRevision: main
+      path: infra/cluster-discovery
+    
+    # Wave 0-2: RHOAI Dependencies (NFD, Kueue, DCGM)
+    - repoURL: https://github.com/dandawg/rhoai-deploy.git
+      targetRevision: main
+      path: platform/rhoai-operator/dependencies
+    
+    # Wave 0-2: NVIDIA GPU Operator
+    - repoURL: https://github.com/dandawg/rhoai-deploy.git
+      targetRevision: main
+      path: platform/nvidia-gpu-operator
+    
+    # Wave 1: GPU MachineSet (g6e.2xlarge for LLM - qwen3-vl-8b)
+    - repoURL: https://github.com/dandawg/openshift-infra.git
+      targetRevision: main
+      path: infra/gpu-machineset/aws/helm
+      helm:
+        valueFiles:
+          - values-g6e-2xlarge.yaml
+        # Note: Cluster info must be manually set after cluster-discovery job runs
+        # or use ArgoCD 2.6+ variable substitution
+    
+    # Wave 1: GPU MachineSet (g4dn.xlarge for embedding model - qwen3-vl-embedding-2b)
+    - repoURL: https://github.com/dandawg/openshift-infra.git
+      targetRevision: main
+      path: infra/gpu-machineset/aws/helm
+      helm:
+        valueFiles:
+          - values-g4dn-xlarge.yaml
+        # Note: Cluster info must be manually set after cluster-discovery job runs
+        # or use ArgoCD 2.6+ variable substitution
+    
+    # Wave 1: CPU MachineSet (m6a.4xlarge for RHOAI and app pod support)
+    - repoURL: https://github.com/dandawg/openshift-infra.git
+      targetRevision: main
+      path: infra/cpu-machineset/aws/helm
+      helm:
+        valueFiles:
+          - values-m6a-4xlarge.yaml
+        # Note: Cluster info must be manually set after cluster-discovery job runs
+        # or use ArgoCD 2.6+ variable substitution
+    
+    # Wave 1: RHOAI Operator Base
+    - repoURL: https://github.com/dandawg/rhoai-deploy.git
+      targetRevision: main
+      path: platform/rhoai-operator/base
+    
+    # Wave 2: RHOAI Instance (DataScienceCluster)
+    - repoURL: https://github.com/dandawg/rhoai-deploy.git
+      targetRevision: main
+      path: platform/rhoai-operator/instance
+    
+    # Wave 8-9: Model Base Resources (Namespace, RBAC)
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/models/base
+    
+    # Wave 10: Hardware Profile (g4dn.xlarge for embedding model)
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/hardware-profiles/g4dn-xlarge
+    
+    # Wave 10: Hardware Profile (g6e.2xlarge for LLM)
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/hardware-profiles/g6e-2xlarge
+    
+    # Wave 11-13: qwen3-vl-8b Model Download Job
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/models/jobs/qwen3-vl-8b/pvc
+    
+    # Wave 14-15: qwen3-vl-8b Model Serving
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/models/serving/qwen3-vl-8b/pvc
+    
+    # Wave 11-13: qwen3-vl-embedding-2b Model Download Job
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/models/jobs/qwen3-vl-embedding-2b/pvc
+    
+    # Wave 14-15: qwen3-vl-embedding-2b Model Serving
+    - repoURL: https://github.com/dandawg/rhoai-model-serving.git
+      targetRevision: main
+      path: platform/models/serving/qwen3-vl-embedding-2b/pvc
+    
+    # Wave 30: External Secrets Operator
+    - repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+      targetRevision: main
+      path: anythingllm-generic/platform/eso-operator
+    
+    # Wave 31: ESO Token Secrets (ClusterSecretStore + ExternalSecret)
+    - repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+      targetRevision: main
+      path: anythingllm-generic/platform/eso-secrets
+    
+    # Wave 40: AnythingLLM Application
+    - repoURL: https://github.com/dandawg/anythingllm-on-ocp.git
+      targetRevision: main
+      path: helm
+      helm:
+        valueFiles:
+          - values-rhoai.yaml
+        values: |
+          # Override with complete deployment values
+          namespace: demo-apps
+          
+          env:
+            - name: LLM_PROVIDER
+              value: "generic-openai"
+            - name: GENERIC_OPEN_AI_BASE_PATH
+              value: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+            - name: GENERIC_OPEN_AI_MODEL_PREF
+              value: "qwen3-vl-8b"
+            - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
+              value: "30000"
+            - name: GENERIC_OPEN_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: model-api-tokens
+                  key: GENERIC_OPEN_AI_API_KEY
+            - name: EMBEDDING_ENGINE
+              value: "generic-openai"
+            - name: EMBEDDING_BASE_PATH
+              value: "http://qwen3-vl-embedding-2b-predictor.demo.svc.cluster.local:8080/v1"
+            - name: EMBEDDING_MODEL_PREF
+              value: "qwen3-vl-embedding-2b"
+            - name: GENERIC_OPEN_AI_EMBEDDING_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: model-api-tokens
+                  key: GENERIC_OPEN_AI_EMBEDDING_API_KEY
+            - name: VECTOR_DB
+              value: "lancedb"
+            - name: DISABLE_TELEMETRY
+              value: "true"
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+          
+          envFrom:
+            - secretRef:
+                name: model-api-tokens
+          
+          storage:
+            size: 20Gi
+            storageClassName: ""
+          
+          chromadb:
+            enabled: false
+  
+  destination:
+    server: https://kubernetes.default.svc
+  
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  
+  # Ignore expected differences for operator-managed resources
+  ignoreDifferences:
+    - group: machine.openshift.io
+      kind: MachineSet
+      jsonPointers:
+        - /spec/replicas
+        - /spec/template/spec/providerSpec/value/blockDevices/0/ebs/volumeSize
+    - group: datasciencecluster.opendatahub.io
+      kind: DataScienceCluster
+      jsonPointers:
+        - /spec/components/*/devFlags

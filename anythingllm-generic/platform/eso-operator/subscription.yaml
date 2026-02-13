@@ -1,0 +1,13 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: external-secrets-operator
+  namespace: external-secrets-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  channel: stable
+  name: external-secrets-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

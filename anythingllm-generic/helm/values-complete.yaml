@@ -1,0 +1,50 @@
+# Complete deployment values for AnythingLLM
+# This file configures AnythingLLM with qwen3-vl-8b and qwen3-vl-embedding-2b models
+
+namespace: demo-apps
+
+# Environment variables for AnythingLLM
+env:
+  # LLM Provider - OpenAI API compatible mode
+  - name: LLM_PROVIDER
+    value: "generic-openai"
+  - name: GENERIC_OPEN_AI_BASE_PATH
+    value: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+  - name: GENERIC_OPEN_AI_MODEL_PREF
+    value: "qwen3-vl-8b"
+  - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
+    value: "30000"
+  
+  # Embedding configuration
+  - name: EMBEDDING_ENGINE
+    value: "generic-openai"
+  - name: EMBEDDING_BASE_PATH
+    value: "http://qwen3-vl-embedding-2b-predictor.demo.svc.cluster.local:8080/v1"
+  - name: EMBEDDING_MODEL_PREF
+    value: "qwen3-vl-embedding-2b"
+  
+  # Vector database - using built-in LanceDB
+  - name: VECTOR_DB
+    value: "lancedb"
+  
+  # Disable telemetry
+  - name: DISABLE_TELEMETRY
+    value: "true"
+  
+  # Disable TLS certificate validation for internal cluster services
+  - name: NODE_TLS_REJECT_UNAUTHORIZED
+    value: "0"
+
+# Load API tokens from External Secrets synced secret
+envFrom:
+  - secretRef:
+      name: model-api-tokens
+
+# Storage configuration
+storage:
+  size: 20Gi
+  storageClassName: ""  # Use default storage class
+
+# ChromaDB is disabled - using built-in LanceDB instead
+chromadb:
+  enabled: false
