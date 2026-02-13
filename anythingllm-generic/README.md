@@ -53,8 +53,10 @@ echo "https://$(oc get route openshift-gitops-server -n openshift-gitops -o json
 # Get ArgoCD admin password
 oc get secret -n openshift-gitops openshift-gitops-cluster -o jsonpath='{.data.admin\.password}' | base64 -d
 
-# Login to ArgoCD via CLI
+# ArgoCD via CLI (depends on argocd cli)
 argocd login $(oc get routes -n openshift-gitops openshift-gitops-server -o jsonpath='{.spec.host}') --username admin --password $(oc get secret -n openshift-gitops openshift-gitops-cluster -o jsonpath='{.data.admin\.password}' | base64 -d) --insecure
+
+argocd app list
 ```
 
 Monitor GPU node provisioning:
@@ -103,6 +105,34 @@ This deployment references the [openshift-infra](https://github.com/dandawg/open
 The openshift-infra repo can also be used standalone for infrastructure provisioning.
 
 ## Troubleshooting
+
+## Troubleshooting
+
+**ArgoCD sync timeout error?**
+
+If you see "one or more synchronization tasks are not valid due to application controller sync timeout":
+
+1. Check if the cluster-info-discovery job is stuck:
+```bash
+oc get job cluster-info-discovery -n openshift-machine-api
+oc describe job cluster-info-discovery -n openshift-machine-api
+```
+
+2. If the job shows "FailedCreate" errors about missing ServiceAccount, the sync wave ordering needs to be fixed in the source repository. The fix ensures:
+   - Wave -2: ServiceAccount and RBAC resources (created first)
+   - Wave -1: cluster-info-discovery Job (runs after RBAC is ready)
+   - Wave 0+: Other infrastructure components
+
+3. Check ArgoCD application status:
+```bash
+oc get application anythingllm-complete -n openshift-gitops -o jsonpath='{.status.operationState}'
+```
+
+4. If sync is stuck, you can delete and recreate the application:
+```bash
+oc delete application anythingllm-complete -n openshift-gitops
+oc apply -f gitops/anythingllm-complete.yaml
+```
 
 **Nodes not ready?**
 ```bash

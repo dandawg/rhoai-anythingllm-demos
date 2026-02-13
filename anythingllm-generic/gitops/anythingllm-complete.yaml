@@ -173,12 +173,14 @@ spec:
       prune: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
     retry:
-      limit: 5
+      limit: 15
       backoff:
-        duration: 10s
+        duration: 30s
         factor: 2
-        maxDuration: 5m
+        maxDuration: 15m
   
   # Ignore expected differences for operator-managed resources
   ignoreDifferences:
