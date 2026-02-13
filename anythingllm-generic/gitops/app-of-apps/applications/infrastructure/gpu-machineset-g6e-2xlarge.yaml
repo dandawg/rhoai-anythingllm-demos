@@ -4,13 +4,13 @@ metadata:
   name: gpu-machineset-g6e-2xlarge
   namespace: openshift-gitops
   labels:
-    app.kubernetes.io/name: gpu-machineset-g6e-2xlarge
+    app.kubernetes.io/name: gpu-machineset-aws
     app.kubernetes.io/part-of: rhoai-demos
+    app.kubernetes.io/component: infrastructure
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: rhoai-infrastructure
-  
   source:
     repoURL: https://github.com/dandawg/openshift-infra.git
     targetRevision: main
@@ -18,26 +18,32 @@ spec:
     helm:
       valueFiles:
         - values-g6e-2xlarge.yaml
-      # Note: Cluster info must be manually set after cluster-discovery job runs
-      # or use ArgoCD 2.6+ variable substitution
-  
+      parameters:
+        - name: clusterName
+          value: REPLACE_ME  # Auto-populated by machineset-params-updater job
+        - name: region
+          value: REPLACE_ME
+        - name: availabilityZone
+          value: REPLACE_ME
+        - name: infraID
+          value: REPLACE_ME
+        - name: amiId
+          value: REPLACE_ME
   destination:
     server: https://kubernetes.default.svc
-  
+    namespace: openshift-machine-api
   syncPolicy:
     automated:
       selfHeal: true
       prune: true
     syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
+      - CreateNamespace=false
     retry:
       limit: 5
       backoff:
-        duration: 30s
+        duration: 10s
         factor: 2
-        maxDuration: 10m
-  
+        maxDuration: 5m
   ignoreDifferences:
     - group: machine.openshift.io
       kind: MachineSet

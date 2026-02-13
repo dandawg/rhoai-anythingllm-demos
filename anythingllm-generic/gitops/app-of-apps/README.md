@@ -50,18 +50,24 @@ app-of-apps/
 
 ## Deployment
 
-### One-Click Deployment
+### Quick Start - Fully Automated
 
-Deploy the entire stack with a single command:
+Deploy the entire stack:
 
 ```bash
 oc apply -f anythingllm-generic/gitops/anythingllm-bootstrap.yaml
 ```
 
-This will:
-1. Create all ArgoCD Projects
-2. Deploy all child Applications in the correct order (via sync waves)
-3. Deploy all resources from your building block repositories
+**That's it!** The deployment is fully automated through GitOps:
+
+1. **Wave 0**: Cluster discovery job runs and creates cluster-info ConfigMap
+2. **Wave 1**: Parameter updater job patches MachineSet Applications with cluster values  
+3. **Wave 2**: MachineSets auto-sync and deploy with valid cluster-specific names
+4. **Wave 0-40**: All other components deploy in sequence
+
+**No manual scripts. No intervention required. Everything happens through ArgoCD.**
+
+> **Note**: The MachineSet Applications are automatically configured with cluster-specific parameters by a Kubernetes Job. See [MACHINESET-DEPLOYMENT.md](MACHINESET-DEPLOYMENT.md) for architecture details.
 
 ### Monitoring Progress
 
