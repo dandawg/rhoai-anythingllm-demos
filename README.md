@@ -13,17 +13,51 @@ This repository provides end-to-end demo deployments that showcase:
 ## Prerequisites
 
 - **OpenShift 4.19+** on AWS with cluster-admin access
-- **`oc` CLI** installed and configured
+- **`oc` and `argocd` CLI** installed and configured
 - **OpenShift GitOps** (ArgoCD) - See installation below
-- **AWS quota** for GPU instances (g4dn, g6, g6e) and CPU instances (m6a)
+- **AWS quota** for GPU instances (g4dn, g6e) and CPU instances (m6a)
 
 ### Install OpenShift GitOps (if needed)
 
 ```bash
+# Install OpenShift GitOps operator
 ./bootstrap.sh
 ```
 
-**Note:** If GitOps is already installed (e.g., from deploying another repository), the bootstrap script will detect it and skip installation.
+## Quick Start
+
+### 1. Deploy MachineSets
+
+First, deploy the required GPU and CPU MachineSets using the deployment script:
+
+```bash
+cd anythingllm-generic
+
+# Deploy all machinesets (1 CPU + 2 GPU types)
+./scripts/deploy-machinesets.sh
+
+# Or deploy selectively
+# ./scripts/deploy-machinesets.sh --cpu-only
+# ./scripts/deploy-machinesets.sh --gpu-type g4dn.xlarge
+```
+
+The script automatically:
+- Discovers your cluster information (name, region, availability zone, AMI ID)
+- Creates ArgoCD Applications for MachineSets
+- Sets Helm parameters with cluster-specific values
+- Syncs applications to deploy MachineSets
+
+### 2. Deploy Application Stack
+
+Once MachineSets are deploying, apply the bootstrap application:
+
+```bash
+oc apply -f gitops/anythingllm-bootstrap.yaml
+```
+
+**Total deployment time: ~25-30 minutes**
+
+See [anythingllm-generic/README.md](anythingllm-generic/README.md) for detailed documentation.
 
 ## Available Demos
 
@@ -36,7 +70,10 @@ Complete deployment with:
 - Model serving (Qwen3-VL-8B + embeddings)
 - AnythingLLM application
 
-See [anythingllm-generic/README.md](anythingllm-generic/README.md) for details.
+Features:
+- Script-based MachineSet deployment
+- GitOps-driven platform and application deployment
+- App-of-Apps pattern for organized resource management
 
 ## Repository Structure
 
@@ -47,9 +84,13 @@ rhoai-anythingllm-demos/
 ├── bootstrap/             # GitOps operator manifests
 │   └── gitops-operator/
 └── anythingllm-generic/   # Complete demo deployment
-    ├── README.md
+    ├── README.md          # Detailed deployment guide
+    ├── scripts/
+    │   └── deploy-machinesets.sh  # MachineSet deployment script
     └── gitops/
-        └── anythingllm-complete.yaml
+        ├── anythingllm-bootstrap.yaml  # App-of-Apps deployment
+        ├── anythingllm-complete.yaml   # Monolithic deployment
+        └── app-of-apps/                # ArgoCD Application definitions
 ```
 
 ## Related Repositories

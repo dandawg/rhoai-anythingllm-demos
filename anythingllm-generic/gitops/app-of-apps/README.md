@@ -50,24 +50,58 @@ app-of-apps/
 
 ## Deployment
 
-### Quick Start - Fully Automated
+### Prerequisites
 
-Deploy the entire stack:
+Before deploying, ensure you have:
+
+1. **OpenShift Cluster**: OpenShift 4.19+ on AWS with cluster-admin access
+2. **OpenShift GitOps**: Installed and running (see bootstrap section below)
+3. **CLI Tools**: Both `oc` and `argocd` CLI installed
+4. **Logged In**: Authenticated to your OpenShift cluster via `oc login`
+
+### Quick Start
+
+**Step 1: Install OpenShift GitOps (if needed)**
+
+```bash
+# Clone the openshift-infra repository
+git clone https://github.com/dandawg/openshift-infra.git
+cd openshift-infra
+
+# Install OpenShift GitOps
+./bootstrap.sh
+```
+
+**Step 2: Deploy MachineSets**
+
+Deploy CPU and GPU MachineSets using the deployment script:
+
+```bash
+# Deploy all machinesets (1 CPU + 2 GPU types)
+./anythingllm-generic/scripts/deploy-machinesets.sh
+
+# Or deploy selectively
+./anythingllm-generic/scripts/deploy-machinesets.sh --cpu-only
+./anythingllm-generic/scripts/deploy-machinesets.sh --gpu-type g4dn.xlarge
+```
+
+The script will:
+- Auto-discover your cluster information (name, region, availability zone, AMI ID)
+- Create ArgoCD Applications for the MachineSets
+- Set Helm parameters with cluster-specific values
+- Sync the applications to deploy MachineSets
+
+See [scripts/README.md](../../scripts/README.md) for detailed script documentation and troubleshooting.
+
+**Step 3: Deploy Application Stack**
+
+Once MachineSets are deploying, apply the bootstrap application:
 
 ```bash
 oc apply -f anythingllm-generic/gitops/anythingllm-bootstrap.yaml
 ```
 
-**That's it!** The deployment is fully automated through GitOps:
-
-1. **Wave 0**: Cluster discovery job runs and creates cluster-info ConfigMap
-2. **Wave 1**: Parameter updater job patches MachineSet Applications with cluster values  
-3. **Wave 2**: MachineSets auto-sync and deploy with valid cluster-specific names
-4. **Wave 0-40**: All other components deploy in sequence
-
-**No manual scripts. No intervention required. Everything happens through ArgoCD.**
-
-> **Note**: The MachineSet Applications are automatically configured with cluster-specific parameters by a Kubernetes Job. The bootstrap Application includes `ignoreDifferences` to prevent ArgoCD's self-heal from reverting these automated patches. See [MACHINESET-DEPLOYMENT.md](MACHINESET-DEPLOYMENT.md) for architecture details.
+**That's it!** The rest of the deployment happens automatically through GitOps sync waves.
 
 ### Monitoring Progress
 
@@ -92,8 +126,8 @@ oc get applications -n openshift-gitops -l argocd.argoproj.io/project=rhoai-infr
 Applications deploy in the following order:
 
 - **Wave -1**: Cleanup hooks
-- **Wave 0**: Cluster discovery, RHOAI dependencies, GPU operators
-- **Wave 1**: MachineSets, RHOAI operator
+- **Wave 0**: MachineSets, RHOAI dependencies, GPU operators
+- **Wave 1**: RHOAI operator
 - **Wave 2**: RHOAI instance (DataScienceCluster)
 - **Wave 8**: Model base resources
 - **Wave 10**: Hardware profiles
@@ -158,11 +192,11 @@ oc delete appproject -n openshift-gitops rhoai-models
 
 All actual manifests remain in their original repositories:
 
-- **openshift-infra**: Cluster discovery, MachineSets
+- **openshift-infra**: MachineSets
 - **rhoai-deploy**: RHOAI operators, dependencies, GPU operators
 - **rhoai-model-serving**: Models, hardware profiles, serving runtimes
 - **anythingllm-on-ocp**: AnythingLLM Helm charts
-- **rhoai-anythingllm-demos**: ESO operator/secrets, hooks
+- **rhoai-anythingllm-demos**: ESO operator/secrets, hooks, deployment scripts
 
 The App of Apps structure only contains ArgoCD Application definitions that reference these building blocks.
 
@@ -183,7 +217,18 @@ The App of Apps structure only contains ArgoCD Application definitions that refe
 - Granular RBAC and governance per project
 - Same building block repositories
 - Same sync wave ordering
-- Same one-click deployment
+- MachineSet deployment via local script before bootstrap
+
+## MachineSet Deployment
+
+MachineSets are deployed using a local deployment script **before** applying the bootstrap application. This approach:
+
+- Provides dynamic cluster value discovery
+- Avoids in-cluster automation complexity
+- Gives clear feedback during deployment
+- Works reliably across different cluster configurations
+
+See [scripts/README.md](../../scripts/README.md) for detailed documentation on MachineSet deployment.
 
 ## Troubleshooting
 

@@ -35,22 +35,3 @@ spec:
         duration: 30s
         factor: 2
         maxDuration: 10m
-  
-  # Ignore differences in MachineSet Application parameters
-  # These are automatically populated by the machineset-params-updater job
-  ignoreDifferences:
-    - group: argoproj.io
-      kind: Application
-      name: cpu-machineset-m6a-4xlarge
-      jsonPointers:
-        - /spec/source/helm/parameters
-    - group: argoproj.io
-      kind: Application
-      name: gpu-machineset-g4dn-xlarge
-      jsonPointers:
-        - /spec/source/helm/parameters
-    - group: argoproj.io
-      kind: Application
-      name: gpu-machineset-g6e-2xlarge
-      jsonPointers:
-        - /spec/source/helm/parameters

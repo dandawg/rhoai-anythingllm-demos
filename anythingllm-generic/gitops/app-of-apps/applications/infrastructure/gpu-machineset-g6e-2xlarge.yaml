@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: rhoai-demos
     app.kubernetes.io/component: infrastructure
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: rhoai-infrastructure
   source:
@@ -18,23 +18,12 @@ spec:
     helm:
       valueFiles:
         - values-g6e-2xlarge.yaml
-      parameters:
-        - name: clusterName
-          value: REPLACE_ME  # Auto-populated by machineset-params-updater job
-        - name: region
-          value: REPLACE_ME
-        - name: availabilityZone
-          value: REPLACE_ME
-        - name: infraID
-          value: REPLACE_ME
-        - name: amiId
-          value: REPLACE_ME
   destination:
     server: https://kubernetes.default.svc
     namespace: openshift-machine-api
   syncPolicy:
     automated:
-      selfHeal: true
+      selfHeal: false
       prune: true
     syncOptions:
       - CreateNamespace=false
