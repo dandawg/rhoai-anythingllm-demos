@@ -67,7 +67,7 @@ oc apply -f anythingllm-generic/gitops/anythingllm-bootstrap.yaml
 
 **No manual scripts. No intervention required. Everything happens through ArgoCD.**
 
-> **Note**: The MachineSet Applications are automatically configured with cluster-specific parameters by a Kubernetes Job. See [MACHINESET-DEPLOYMENT.md](MACHINESET-DEPLOYMENT.md) for architecture details.
+> **Note**: The MachineSet Applications are automatically configured with cluster-specific parameters by a Kubernetes Job. The bootstrap Application includes `ignoreDifferences` to prevent ArgoCD's self-heal from reverting these automated patches. See [MACHINESET-DEPLOYMENT.md](MACHINESET-DEPLOYMENT.md) for architecture details.
 
 ### Monitoring Progress
 

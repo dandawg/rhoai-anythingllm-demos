@@ -77,6 +77,22 @@ The deployment uses a **zero-manual-intervention** approach where a Kubernetes J
 - Auto-sync enabled after parameter update
 - Deploy automatically once parameters are patched
 
+### 4. Bootstrap Application Configuration
+**Critical**: The `anythingllm-bootstrap` Application includes `ignoreDifferences` for the MachineSet Applications' helm parameters:
+
+```yaml
+ignoreDifferences:
+  - group: argoproj.io
+    kind: Application
+    name: cpu-machineset-m6a-4xlarge
+    jsonPointers:
+      - /spec/source/helm/parameters
+```
+
+**Why this is needed**: Without `ignoreDifferences`, ArgoCD's self-heal would detect the Job's patches as drift from Git (since Git has `REPLACE_ME` values) and revert them back to `REPLACE_ME`, breaking the automation.
+
+**How it works**: ArgoCD ignores the helm parameters field when comparing desired state (Git) vs actual state (cluster), allowing the Job's patches to persist.
+
 ## Deployment
 
 ### One Command Deployment
@@ -180,6 +196,9 @@ A: A one-time Job is simpler and sufficient. Once parameters are set, they don't
 
 **Q: Why patch Applications instead of using the argocd CLI?**  
 A: Direct Kubernetes API calls are more reliable and don't require external tool installation or authentication.
+
+**Q: Won't ArgoCD's self-heal revert the patched values back to REPLACE_ME?**  
+A: No, because the bootstrap Application includes `ignoreDifferences` for the helm parameters. This tells ArgoCD to ignore those fields when checking for drift, allowing the Job's patches to persist.
 
 **Q: What if I want to change parameters later?**  
 A: Edit the Application directly or update the cluster-info ConfigMap and rerun the updater job.
