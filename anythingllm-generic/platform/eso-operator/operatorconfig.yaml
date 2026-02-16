@@ -1,0 +1,15 @@
+apiVersion: operator.external-secrets.io/v1alpha1
+kind: OperatorConfig
+metadata:
+  name: cluster
+  namespace: external-secrets-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi

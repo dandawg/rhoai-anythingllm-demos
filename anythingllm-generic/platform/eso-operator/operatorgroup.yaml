@@ -7,4 +7,5 @@ metadata:
     argocd.argoproj.io/sync-wave: "30"
 spec:
   targetNamespaces:
-    - external-secrets-system
+    - demo-apps
+    - demo
