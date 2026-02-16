@@ -90,7 +90,7 @@ spec:
     # Wave 11-13: qwen3-vl-8b Model Download Job
     - repoURL: https://github.com/dandawg/rhoai-model-serving.git
       targetRevision: main
-      path: platform/models/jobs/qwen3-vl-8b/pvc
+      path: platform/models/jobs/qwen3-vl-8b/base
     
     # Wave 14-15: qwen3-vl-8b Model Serving
     - repoURL: https://github.com/dandawg/rhoai-model-serving.git
@@ -100,7 +100,7 @@ spec:
     # Wave 11-13: qwen3-vl-embedding-2b Model Download Job
     - repoURL: https://github.com/dandawg/rhoai-model-serving.git
       targetRevision: main
-      path: platform/models/jobs/qwen3-vl-embedding-2b/pvc
+      path: platform/models/jobs/qwen3-vl-embedding-2b/base
     
     # Wave 14-15: qwen3-vl-embedding-2b Model Serving
     - repoURL: https://github.com/dandawg/rhoai-model-serving.git
