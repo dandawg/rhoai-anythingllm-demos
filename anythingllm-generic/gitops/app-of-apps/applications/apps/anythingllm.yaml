@@ -81,3 +81,12 @@ spec:
         duration: 30s
         factor: 2
         maxDuration: 10m
+  
+  # Ignore OpenShift Route status differences to prevent ArgoCD diff calculation errors
+  # when using ServerSideApply with OpenShift-specific CRDs that may not be fully
+  # registered in ArgoCD's API resource schema
+  ignoreDifferences:
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers:
+        - /status
