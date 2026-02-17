@@ -4,7 +4,7 @@ metadata:
   name: eso-secret-reader
   namespace: demo
   annotations:
-    argocd.argoproj.io/sync-wave: "31"
+    argocd.argoproj.io/sync-wave: "32"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

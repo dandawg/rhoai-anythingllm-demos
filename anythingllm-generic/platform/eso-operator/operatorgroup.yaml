@@ -5,7 +5,6 @@ metadata:
   namespace: external-secrets-system
   annotations:
     argocd.argoproj.io/sync-wave: "30"
-spec:
-  targetNamespaces:
-    - demo-apps
-    - demo
+spec: {}
+  # Empty spec = watch all namespaces
+  # Required for ClusterSecretStore (cluster-scoped resource)

@@ -4,12 +4,8 @@ metadata:
   name: cluster
   namespace: external-secrets-system
   annotations:
-    argocd.argoproj.io/sync-wave: "30"
-spec:
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
+    argocd.argoproj.io/sync-wave: "31"
+spec: {}
+  # Minimal config to deploy External Secrets controllers
+  # The helm-operator will deploy the actual ESO controllers
+  # based on this OperatorConfig

@@ -4,7 +4,7 @@ metadata:
   name: eso-secret-writer
   namespace: demo-apps
   annotations:
-    argocd.argoproj.io/sync-wave: "31"
+    argocd.argoproj.io/sync-wave: "32"
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -16,7 +16,7 @@ metadata:
   name: eso-secret-writer
   namespace: demo-apps
   annotations:
-    argocd.argoproj.io/sync-wave: "31"
+    argocd.argoproj.io/sync-wave: "32"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
