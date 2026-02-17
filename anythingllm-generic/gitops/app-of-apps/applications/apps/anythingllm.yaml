@@ -31,6 +31,8 @@ spec:
             value: "qwen3-vl-8b"
           - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
             value: "30000"
+          - name: GENERIC_OPEN_AI_MAX_TOKENS
+            value: "25000"
           - name: GENERIC_OPEN_AI_API_KEY
             valueFrom:
               secretKeyRef:
@@ -76,7 +78,6 @@ spec:
       prune: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
     retry:
       limit: 5
       backoff:
@@ -84,15 +85,13 @@ spec:
         factor: 2
         maxDuration: 10m
   
-  # Ignore OpenShift Route status differences to prevent ArgoCD diff calculation errors
-  # when using ServerSideApply with OpenShift-specific CRDs that may not be fully
-  # registered in ArgoCD's API resource schema
+  # Ignore OpenShift Route status field which is managed by the OpenShift router controller
   ignoreDifferences:
     - group: route.openshift.io
       kind: Route
       jsonPointers:
         - /status
-    # Ignore PVC immutable fields that are set by Kubernetes after binding
+    # Ignore PVC volumeName which is set by Kubernetes when the PVC binds to a PV
     - group: ""
       kind: PersistentVolumeClaim
       jsonPointers:
