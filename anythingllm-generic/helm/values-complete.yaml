@@ -35,6 +35,10 @@ env:
   - name: NODE_TLS_REJECT_UNAUTHORIZED
     value: "0"
 
+  # Enable AnythingLLM Hub Agent Skills
+  - name: ENABLE_ANYTHINGLLM_HUB_AGENT_SKILLS
+    value: "1"
+
 # Load API tokens from External Secrets synced secret
 envFrom:
   - secretRef:
