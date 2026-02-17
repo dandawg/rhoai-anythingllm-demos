@@ -62,7 +62,7 @@ spec:
         
         storage:
           size: 20Gi
-          storageClassName: ""
+          storageClassName: "gp3-csi"
         
         chromadb:
           enabled: false
@@ -92,3 +92,8 @@ spec:
       kind: Route
       jsonPointers:
         - /status
+    # Ignore PVC immutable fields that are set by Kubernetes after binding
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
