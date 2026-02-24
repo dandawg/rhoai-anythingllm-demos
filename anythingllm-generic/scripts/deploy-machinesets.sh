@@ -22,7 +22,7 @@ print_usage() {
   echo "Options:"
   echo "  --cpu-only          Deploy only CPU machineset"
   echo "  --gpu-only          Deploy only GPU machinesets"
-  echo "  --gpu-type TYPE     Deploy specific GPU type (g4dn.xlarge or g6e.2xlarge)"
+  echo "  --gpu-type TYPE     Deploy specific GPU type (g4dn.xlarge, g6e.2xlarge, or g6.2xlarge)"
   echo "                      Can be specified multiple times"
   echo "  --help              Show this help message"
   echo ""
@@ -38,6 +38,7 @@ print_usage() {
   echo "  $0                           # Deploy all machinesets"
   echo "  $0 --cpu-only                # Deploy only CPU"
   echo "  $0 --gpu-type g4dn.xlarge    # Deploy only g4dn GPU"
+  echo "  $0 --gpu-type g6.2xlarge     # Deploy only g6 GPU (0 replicas, for FLUX.2 add-on)"
   echo "  REPLICA_COUNT=2 $0           # Deploy with 2 replicas each"
 }
 
@@ -70,7 +71,7 @@ done
 
 # If GPU types specified, use those; otherwise deploy all
 if [ ${#GPU_TYPES[@]} -eq 0 ]; then
-  GPU_TYPES=("g4dn.xlarge" "g6e.2xlarge")
+  GPU_TYPES=("g4dn.xlarge" "g6e.2xlarge" "g6.2xlarge")
 fi
 
 # If --gpu-only with specific types, only deploy those
@@ -146,15 +147,19 @@ echo "  Logged in to ArgoCD at $ARGOCD_SERVER"
 echo ""
 
 # Function to deploy a machineset
+# Args: APP_NAME GITOPS_FILE INSTANCE_TYPE MACHINE_NAME_SUFFIX [REPLICA_OVERRIDE]
+# REPLICA_OVERRIDE: if set, uses this value instead of $REPLICA_COUNT
 deploy_machineset() {
   local APP_NAME=$1
   local GITOPS_FILE=$2
   local INSTANCE_TYPE=$3
   local MACHINE_NAME_SUFFIX=$4
-  
+  local EFFECTIVE_REPLICAS=${5:-$REPLICA_COUNT}
+
   echo "----------------------------------------"
   echo "Deploying: $APP_NAME"
   echo "Instance Type: $INSTANCE_TYPE"
+  echo "Replicas: $EFFECTIVE_REPLICAS"
   echo "----------------------------------------"
   
   # Step 3: Create the ArgoCD Application
@@ -174,7 +179,7 @@ deploy_machineset() {
     -p availabilityZone="$AVAILABILITY_ZONE" \
     -p infraID="$INFRA_ID" \
     -p amiId="$AMI_ID" \
-    -p replicas="$REPLICA_COUNT" > /dev/null 2>&1
+    -p replicas="$EFFECTIVE_REPLICAS" > /dev/null 2>&1
   
   if [ -n "$MACHINE_NAME_SUFFIX" ]; then
     argocd app set $APP_NAME -p machineNameSuffix="$MACHINE_NAME_SUFFIX" > /dev/null 2>&1
@@ -224,6 +229,15 @@ if [ "$DEPLOY_GPU" = true ]; then
           "$REPO_ROOT/anythingllm-generic/gitops/app-of-apps/applications/infrastructure/gpu-machineset-g6e-2xlarge.yaml" \
           "g6e.2xlarge" \
           "g6e"
+        ;;
+      "g6.2xlarge")
+        # Deployed at 0 replicas by default; scale up manually when using the FLUX.2 optional add-on
+        deploy_machineset \
+          "gpu-machineset-g6-2xlarge" \
+          "$REPO_ROOT/anythingllm-generic/gitops/app-of-apps/applications/infrastructure/gpu-machineset-g6-2xlarge.yaml" \
+          "g6.2xlarge" \
+          "g6" \
+          "0"
         ;;
       *)
         echo "Warning: Unsupported GPU type '$GPU_TYPE'. Skipping."
