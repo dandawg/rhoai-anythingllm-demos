@@ -80,8 +80,6 @@ oc get nodes -l nvidia.com/gpu.present=true
 
 Once MachineSets are deploying, apply the bootstrap application:
 
-#### Option 1: App of Apps Pattern (Recommended)
-
 ```bash
 oc apply -f gitops/anythingllm-bootstrap.yaml
 ```
@@ -94,21 +92,11 @@ oc apply -f gitops/anythingllm-bootstrap.yaml
 
 See [App of Apps README](gitops/app-of-apps/README.md) for detailed documentation.
 
-#### Option 2: Monolithic Application
-
-```bash
-oc apply -f gitops/anythingllm-complete.yaml
-```
-
-This deploys everything in one ArgoCD Application (original approach).
-
-**Note**: Monolithic deployment may require manual MachineSet configuration. App of Apps pattern is recommended.
-
 ## Monitoring Deployment
 
-Watch ArgoCD Application:
+Watch ArgoCD Applications:
 ```bash
-oc get application anythingllm-complete -n openshift-gitops -w
+oc get applications -n openshift-gitops -w
 ```
 
 Access ArgoCD UI:
@@ -380,21 +368,11 @@ oc describe externalsecret model-api-tokens -n demo-apps
 
 ## Cleanup
 
-### If using App of Apps pattern:
-
 ```bash
 oc delete application anythingllm-bootstrap -n openshift-gitops
 ```
 
-This will cascade delete all child applications and their resources.
-
-### If using monolithic application:
-
-```bash
-oc delete application anythingllm-complete -n openshift-gitops
-```
-
-Both approaches include a PreDelete hook that automatically cleans up orphaned API services to prevent hanging deletions.
+This will cascade delete all child applications and their resources. A PreDelete hook automatically cleans up orphaned API services to prevent hanging deletions.
 
 ### Troubleshooting Deletion Issues
 
@@ -412,7 +390,7 @@ The most common culprit is `v1beta1.visibility.kueue.x-k8s.io` from the Kueue op
 oc delete apiservice v1beta1.visibility.kueue.x-k8s.io
 
 # Remove ArgoCD finalizer if still stuck
-oc patch application anythingllm-complete -n openshift-gitops \
+oc patch application anythingllm-bootstrap -n openshift-gitops \
   -p '{"metadata":{"finalizers":null}}' --type=merge
 ```
 
