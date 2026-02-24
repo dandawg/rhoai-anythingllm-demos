@@ -22,7 +22,7 @@ print_usage() {
   echo "Options:"
   echo "  --cpu-only          Deploy only CPU machineset"
   echo "  --gpu-only          Deploy only GPU machinesets"
-  echo "  --gpu-type TYPE     Deploy specific GPU type (g4dn.xlarge, g6e.2xlarge, or g6.2xlarge)"
+  echo "  --gpu-type TYPE     Deploy specific GPU type (g6e.2xlarge or g6.2xlarge)"
   echo "                      Can be specified multiple times"
   echo "  --help              Show this help message"
   echo ""
@@ -37,7 +37,6 @@ print_usage() {
   echo "Examples:"
   echo "  $0                           # Deploy all machinesets"
   echo "  $0 --cpu-only                # Deploy only CPU"
-  echo "  $0 --gpu-type g4dn.xlarge    # Deploy only g4dn GPU"
   echo "  $0 --gpu-type g6.2xlarge     # Deploy only g6 GPU (0 replicas, for FLUX.2 add-on)"
   echo "  REPLICA_COUNT=2 $0           # Deploy with 2 replicas each"
 }
@@ -71,7 +70,7 @@ done
 
 # If GPU types specified, use those; otherwise deploy all
 if [ ${#GPU_TYPES[@]} -eq 0 ]; then
-  GPU_TYPES=("g4dn.xlarge" "g6e.2xlarge" "g6.2xlarge")
+  GPU_TYPES=("g6e.2xlarge" "g6.2xlarge")
 fi
 
 # If --gpu-only with specific types, only deploy those
@@ -216,13 +215,6 @@ fi
 if [ "$DEPLOY_GPU" = true ]; then
   for GPU_TYPE in "${GPU_TYPES[@]}"; do
     case "$GPU_TYPE" in
-      "g4dn.xlarge")
-        deploy_machineset \
-          "gpu-machineset-g4dn-xlarge" \
-          "$REPO_ROOT/anythingllm-generic/gitops/app-of-apps/applications/infrastructure/gpu-machineset-g4dn-xlarge.yaml" \
-          "g4dn.xlarge" \
-          "g4dn"
-        ;;
       "g6e.2xlarge")
         deploy_machineset \
           "gpu-machineset-g6e-2xlarge" \

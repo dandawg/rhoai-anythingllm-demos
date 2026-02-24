@@ -46,7 +46,7 @@ oc patch application <app-name> -n openshift-gitops \
 argocd app sync <app-name>
 
 # Sync all in a layer (e.g., models)
-for app in model-base-resources hardware-profile-g4dn-xlarge hardware-profile-g6e-2xlarge; do
+for app in model-base-resources hardware-profile-g6e-2xlarge; do
   argocd app sync $app
 done
 ```
@@ -65,12 +65,9 @@ oc delete application anythingllm-bootstrap -n openshift-gitops
 ```bash
 oc delete applications -n openshift-gitops \
   model-base-resources \
-  hardware-profile-g4dn-xlarge \
   hardware-profile-g6e-2xlarge \
   model-download-qwen3-vl-8b \
-  model-download-qwen3-vl-embedding-2b \
-  model-serving-qwen3-vl-8b \
-  model-serving-qwen3-vl-embedding-2b
+  model-serving-qwen3-vl-8b
 ```
 
 **Applications only:**
@@ -89,7 +86,6 @@ oc delete applications -n openshift-gitops \
   rhoai-dependencies \
   nvidia-gpu-operator \
   gpu-machineset-g6e-2xlarge \
-  gpu-machineset-g4dn-xlarge \
   cpu-machineset-m6a-4xlarge
 ```
 

@@ -26,7 +26,6 @@ app-of-apps/
     │   ├── rhoai-dependencies.yaml    # NFD, Kueue, DCGM
     │   ├── nvidia-gpu-operator.yaml   # NVIDIA GPU Operator
     │   ├── gpu-machineset-g6e-2xlarge.yaml
-    │   ├── gpu-machineset-g4dn-xlarge.yaml
     │   └── cpu-machineset-m6a-4xlarge.yaml
     │
     ├── platform/                       # Platform components
@@ -35,12 +34,9 @@ app-of-apps/
     │
     ├── models/                         # Model serving components
     │   ├── model-base-resources.yaml
-    │   ├── hardware-profile-g4dn-xlarge.yaml
     │   ├── hardware-profile-g6e-2xlarge.yaml
     │   ├── model-download-qwen3-vl-8b.yaml
-    │   ├── model-download-qwen3-vl-embedding-2b.yaml
-    │   ├── model-serving-qwen3-vl-8b.yaml
-    │   └── model-serving-qwen3-vl-embedding-2b.yaml
+    │   └── model-serving-qwen3-vl-8b.yaml
     │
     └── apps/                           # Application components
         ├── external-secrets-operator.yaml
@@ -77,12 +73,12 @@ cd openshift-infra
 Deploy CPU and GPU MachineSets using the deployment script:
 
 ```bash
-# Deploy all machinesets (1 CPU + 2 GPU types)
+# Deploy all machinesets (1 CPU + 1 GPU type)
 ./anythingllm-generic/scripts/deploy-machinesets.sh
 
 # Or deploy selectively
 ./anythingllm-generic/scripts/deploy-machinesets.sh --cpu-only
-./anythingllm-generic/scripts/deploy-machinesets.sh --gpu-type g4dn.xlarge
+./anythingllm-generic/scripts/deploy-machinesets.sh --gpu-type g6e.2xlarge
 ```
 
 The script will:
@@ -146,12 +142,9 @@ Remove just the model serving layer:
 ```bash
 oc delete application -n openshift-gitops \
   model-base-resources \
-  hardware-profile-g4dn-xlarge \
   hardware-profile-g6e-2xlarge \
   model-download-qwen3-vl-8b \
-  model-download-qwen3-vl-embedding-2b \
-  model-serving-qwen3-vl-8b \
-  model-serving-qwen3-vl-embedding-2b
+  model-serving-qwen3-vl-8b
 ```
 
 ### Sync Specific Application

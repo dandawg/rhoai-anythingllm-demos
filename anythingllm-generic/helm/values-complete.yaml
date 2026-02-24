@@ -1,5 +1,5 @@
 # Complete deployment values for AnythingLLM
-# This file configures AnythingLLM with qwen3-vl-8b and qwen3-vl-embedding-2b models
+# This file configures AnythingLLM with qwen3-vl-8b
 
 namespace: demo-apps
 
@@ -14,14 +14,6 @@ env:
     value: "qwen3-vl-8b"
   - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
     value: "30000"
-  
-  # Embedding configuration
-  - name: EMBEDDING_ENGINE
-    value: "generic-openai"
-  - name: EMBEDDING_BASE_PATH
-    value: "http://qwen3-vl-embedding-2b-predictor.demo.svc.cluster.local:8080/v1"
-  - name: EMBEDDING_MODEL_PREF
-    value: "qwen3-vl-embedding-2b"
   
   # Vector database - using built-in LanceDB
   - name: VECTOR_DB

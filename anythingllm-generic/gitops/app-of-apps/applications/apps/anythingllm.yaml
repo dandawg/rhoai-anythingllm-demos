@@ -38,17 +38,6 @@ spec:
               secretKeyRef:
                 name: model-api-tokens
                 key: GENERIC_OPEN_AI_API_KEY
-          - name: EMBEDDING_ENGINE
-            value: "generic-openai"
-          - name: EMBEDDING_BASE_PATH
-            value: "http://qwen3-vl-embedding-2b-predictor.demo.svc.cluster.local:8080/v1"
-          - name: EMBEDDING_MODEL_PREF
-            value: "qwen3-vl-embedding-2b"
-          - name: GENERIC_OPEN_AI_EMBEDDING_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: model-api-tokens
-                key: GENERIC_OPEN_AI_EMBEDDING_API_KEY
           - name: VECTOR_DB
             value: "lancedb"
           - name: DISABLE_TELEMETRY

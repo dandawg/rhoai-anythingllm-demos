@@ -6,11 +6,10 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 
 - GPU-enabled OpenShift infrastructure:
   - g6e.2xlarge GPU node (NVIDIA L40S, 48GB) - for qwen3-vl-8b LLM
-  - g4dn.xlarge GPU node (NVIDIA T4, 16GB) - for qwen3-vl-embedding-2b
   - g6.2xlarge GPU node (NVIDIA L4, 24GB) - for FLUX.2-klein-9b-fp8 (optional; MachineSet deployed at scale 0 by default)
   - m6a.4xlarge CPU node (16 vCPU, 64GB RAM) - for RHOAI pod support
 - RHOAI platform with dependencies (NFD, NVIDIA GPU Operator)
-- Model serving: qwen3-vl-8b (LLM) + qwen3-vl-embedding-2b (embeddings)
+- Model serving: qwen3-vl-8b (LLM)
 - External Secrets Operator for automatic token discovery
 - AnythingLLM application pre-configured with model endpoints
 
@@ -24,7 +23,7 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 ✅ `oc` and `argocd` CLI tools installed  
 ✅ OpenShift GitOps (ArgoCD) installed - Run `../bootstrap.sh` if not installed  
 ✅ Cluster admin access  
-✅ Available AWS capacity for g6e.2xlarge, g4dn.xlarge (GPU) and m6a.4xlarge (CPU) instances
+✅ Available AWS capacity for g6e.2xlarge (GPU) and m6a.4xlarge (CPU) instances
 
 ### Install OpenShift GitOps (if needed)
 
@@ -43,12 +42,11 @@ cd anythingllm-generic
 **Important**: MachineSets must be deployed first using the deployment script:
 
 ```bash
-# Deploy all machinesets (1 CPU + 2 GPU types)
+# Deploy all machinesets (1 CPU + 1 GPU type)
 ./scripts/deploy-machinesets.sh
 
 # Or deploy selectively
 # ./scripts/deploy-machinesets.sh --cpu-only
-# ./scripts/deploy-machinesets.sh --gpu-type g4dn.xlarge
 # ./scripts/deploy-machinesets.sh --gpu-type g6e.2xlarge
 
 # Override specific values if needed
@@ -245,7 +243,6 @@ The deployment uses ArgoCD sync waves to orchestrate installation:
 **Prerequisites (run script first):**
 - MachineSets (deployed via `./scripts/deploy-machinesets.sh`)
   - g6e.2xlarge (1 replica) — qwen3-vl-8b LLM
-  - g4dn.xlarge (1 replica) — qwen3-vl-embedding-2b
   - g6.2xlarge (0 replicas, scale up when using FLUX.2 optional add-on)
   - m6a.4xlarge (1 replica) — RHOAI platform pods
 
@@ -261,7 +258,7 @@ The deployment uses ArgoCD sync waves to orchestrate installation:
 ### Repository Dependencies
 
 This deployment references the [openshift-infra](https://github.com/dandawg/openshift-infra) repository for:
-- GPU machineset Helm charts (g6e.2xlarge for LLM, g4dn.xlarge for embedding models)
+- GPU machineset Helm charts (g6e.2xlarge for LLM)
 - CPU machineset Helm charts (m6a.4xlarge for RHOAI platform pods)
 
 The openshift-infra repo can also be used standalone for infrastructure provisioning.
@@ -332,7 +329,6 @@ oc get machines -n openshift-machine-api -o json | \
 ```bash
 # Check GPU nodes
 oc get machines -n openshift-machine-api -l gpu-instance-type=g6e.2xlarge
-oc get machines -n openshift-machine-api -l gpu-instance-type=g4dn.xlarge
 oc describe machine -n openshift-machine-api | grep -A5 gpu
 
 # Check CPU worker
@@ -342,7 +338,7 @@ oc get machines -n openshift-machine-api -l cpu-instance-type=m6a.4xlarge
 oc get events -n openshift-machine-api --sort-by='.lastTimestamp'
 ```
 
-**Models not loading?**
+**Model not loading?**
 ```bash
 oc logs -n demo -l app.kubernetes.io/name=qwen3-vl-8b --tail=100
 ```

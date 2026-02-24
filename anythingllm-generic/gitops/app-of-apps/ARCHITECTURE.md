@@ -67,7 +67,6 @@
 │   ├─ rhoai-dependencies          [Synced] [Healthy]            │
 │   ├─ nvidia-gpu-operator         [Synced] [Healthy]            │
 │   ├─ gpu-machineset-g6e-2xlarge  [Synced] [Healthy]            │
-│   ├─ gpu-machineset-g4dn-xlarge  [Synced] [Healthy]            │
 │   └─ cpu-machineset-m6a-4xlarge  [Synced] [Healthy]            │
 │                                                                 │
 │ ▶ rhoai-platform                                                │
@@ -76,12 +75,9 @@
 │                                                                 │
 │ ▶ rhoai-models                                                  │
 │   ├─ model-base-resources        [Synced] [Healthy]            │
-│   ├─ hardware-profile-g4dn-...   [Synced] [Healthy]            │
 │   ├─ hardware-profile-g6e-2...   [Synced] [Healthy]            │
 │   ├─ model-download-qwen3-vl-8b  [Syncing] [Progressing]       │
-│   ├─ model-download-qwen3-vl-... [Syncing] [Progressing]       │
-│   ├─ model-serving-qwen3-vl-8b   [OutOfSync]                   │
-│   └─ model-serving-qwen3-vl-...  [OutOfSync]                   │
+│   └─ model-serving-qwen3-vl-8b   [OutOfSync]                   │
 │                                                                 │
 │ ▶ rhoai-applications                                            │
 │   ├─ external-secrets-operator   [Synced] [Healthy]            │
