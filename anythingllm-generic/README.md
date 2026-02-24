@@ -7,11 +7,14 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 - GPU-enabled OpenShift infrastructure:
   - g6e.2xlarge GPU node (NVIDIA L40S, 48GB) - for qwen3-vl-8b LLM
   - g4dn.xlarge GPU node (NVIDIA T4, 16GB) - for qwen3-vl-embedding-2b
+  - g6.2xlarge GPU node (NVIDIA L4, 24GB) - for FLUX.2-klein-9b-fp8 (optional; MachineSet deployed at scale 0 by default)
   - m6a.4xlarge CPU node (16 vCPU, 64GB RAM) - for RHOAI pod support
 - RHOAI platform with dependencies (NFD, NVIDIA GPU Operator)
 - Model serving: qwen3-vl-8b (LLM) + qwen3-vl-embedding-2b (embeddings)
 - External Secrets Operator for automatic token discovery
 - AnythingLLM application pre-configured with model endpoints
+
+**Optional add-on:** FLUX.2-klein-9b-fp8 image generation model (requires HuggingFace token — see [Optional Add-ons](#optional-add-ons))
 
 **Total deployment time: ~25-30 minutes**
 
@@ -148,12 +151,115 @@ oc get route anythingllm -n demo-apps -o jsonpath='{.spec.host}'
 
 Open the URL in your browser and start chatting with your locally-served models!
 
+## Optional Add-ons
+
+### FLUX.2-klein-9b-fp8 Image Generation Model
+
+Adds the `black-forest-labs/FLUX.2-klein-9b-fp8` image generation model (9.44 GB, FP8) served on a g6.2xlarge node (NVIDIA L4, 24 GB). This model is gated on HuggingFace and requires a token to download.
+
+> **Note on AnythingLLM integration:** AnythingLLM's OpenAI-compatible LLM slot is already used by qwen3-vl-8b, so this model cannot be auto-configured via environment variables. After deployment you will need to set up the FLUX.2 connection manually inside AnythingLLM.
+
+#### Prerequisites
+
+You need a [HuggingFace account](https://huggingface.co) with access to the `black-forest-labs/FLUX.2-klein-9b-fp8` model repository and a read token.
+
+1. **Request access** to the model on HuggingFace (if you haven't already):  
+   <https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8>
+
+2. **Create a HuggingFace read token** at <https://huggingface.co/settings/tokens>.
+
+#### Step 1: Scale Up the g6.2xlarge MachineSet
+
+The g6.2xlarge MachineSet is deployed by the main bootstrap but starts at 0 replicas to avoid unnecessary cost. Scale it up before deploying the model:
+
+```bash
+# Find the MachineSet name
+oc get machineset -n openshift-machine-api | grep g6
+
+# Scale to 1 replica
+oc scale machineset <machineset-name> -n openshift-machine-api --replicas=1
+
+# Wait for the node to become ready (~5-10 minutes)
+oc wait --for=condition=Ready nodes -l node.kubernetes.io/instance-type=g6.2xlarge --timeout=600s
+```
+
+#### Step 2: Create the HuggingFace Token Secret
+
+The `demo` namespace is created during the main bootstrap (wave 8). Create the secret before or immediately after that wave completes — it must exist when the download job runs.
+
+```bash
+oc create secret generic huggingface-token \
+  --from-literal=token=hf_YOUR_TOKEN_HERE \
+  -n demo
+```
+
+Verify:
+
+```bash
+oc get secret huggingface-token -n demo
+```
+
+#### Step 3: Apply the Optional GitOps Applications
+
+```bash
+oc apply -f gitops/optional/model-download-flux2-klein-9b-fp8.yaml
+oc apply -f gitops/optional/model-serving-flux2-klein-9b-fp8.yaml
+```
+
+ArgoCD will then:
+
+1. Create a PVC and run a download job to pull the model from HuggingFace (~9.4 GB)
+2. Deploy the ServingRuntime and InferenceService once the download completes
+
+#### Step 4: Monitor the Deployment
+
+```bash
+# Watch the download job
+oc get job download-flux2-klein-9b-fp8 -n demo -w
+oc logs -n demo -l app.kubernetes.io/name=flux2-klein-9b-fp8-downloader --follow
+
+# Watch the InferenceService come ready (after download completes)
+oc get inferenceservice flux2-klein-9b-fp8 -n demo -w
+```
+
+The download typically takes 5–15 minutes depending on network speed.
+
+#### Step 5: Connect FLUX.2 in AnythingLLM (Manual)
+
+Once the InferenceService is ready, note the internal service URL:
+
+```
+http://flux2-klein-9b-fp8-predictor.demo.svc.cluster.local:8080/v1
+```
+
+Retrieve the bearer token for the model's service account:
+
+```bash
+oc get secret default-name-flux2-klein-9b-fp8-sa -n demo \
+  -o jsonpath='{.data.token}' | base64 -d
+```
+
+Then in AnythingLLM, manually configure a second LLM or agent connection using the endpoint and token above.
+
+#### Removing the FLUX.2 Add-on
+
+```bash
+oc delete application model-download-flux2-klein-9b-fp8 -n openshift-gitops
+oc delete application model-serving-flux2-klein-9b-fp8 -n openshift-gitops
+```
+
+---
+
 ## Architecture
 
 The deployment uses ArgoCD sync waves to orchestrate installation:
 
 **Prerequisites (run script first):**
 - MachineSets (deployed via `./scripts/deploy-machinesets.sh`)
+  - g6e.2xlarge (1 replica) — qwen3-vl-8b LLM
+  - g4dn.xlarge (1 replica) — qwen3-vl-embedding-2b
+  - g6.2xlarge (0 replicas, scale up when using FLUX.2 optional add-on)
+  - m6a.4xlarge (1 replica) — RHOAI platform pods
 
 **GitOps Deployment (after MachineSets):**
 - **Wave -1**: Cleanup hooks (PreDelete)
