@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: model-download-flux2-klein-9b-fp8
+  name: model-download-flux2-klein-9b
   namespace: openshift-gitops
   labels:
-    app.kubernetes.io/name: model-download-flux2-klein-9b-fp8
+    app.kubernetes.io/name: model-download-flux2-klein-9b
     app.kubernetes.io/part-of: rhoai-demos
   annotations:
     argocd.argoproj.io/sync-wave: "12"
@@ -14,7 +14,7 @@ spec:
   source:
     repoURL: https://github.com/dandawg/rhoai-model-serving.git
     targetRevision: main
-    path: platform/models/jobs/flux2-klein-9b-fp8/base
+    path: platform/models/jobs/flux2-klein-9b/base
 
   destination:
     server: https://kubernetes.default.svc

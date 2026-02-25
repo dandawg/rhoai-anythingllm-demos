@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vllm-omni-runtime
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: vllm-omni-runtime
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    argocd.argoproj.io/sync-wave: "9"
+spec:
+  project: rhoai-models
+
+  source:
+    repoURL: https://github.com/dandawg/rhoai-model-serving.git
+    targetRevision: main
+    path: platform/serving-runtimes/vllm-omni
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
