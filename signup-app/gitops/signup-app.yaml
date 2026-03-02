@@ -63,3 +63,10 @@ spec:
       kind: Build
       jsonPointers:
         - /status
+    # The Deployment image field is intentionally left as a placeholder (" ") in the
+    # Helm chart. OpenShift's ImageStream trigger controller overwrites it with the
+    # actual image SHA after each build. ArgoCD must not treat this as drift.
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - '.spec.template.spec.containers[] | select(.name == "anythingllm-signup-app").image'

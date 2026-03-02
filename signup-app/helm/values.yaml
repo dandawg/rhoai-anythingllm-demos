@@ -8,8 +8,12 @@ userQuota: 30
 # Update this to match your AnythingLLM service name and namespace
 anythingllmUrl: "http://anythingllm.demo-apps.svc.cluster.local:3001"
 
-# Public-facing URL shown to users after successful signup (optional)
-# If empty, users are instructed to open the URL shared by the presenter
+# Name of the AnythingLLM OpenShift Route (used to auto-discover the public URL at deploy time)
+anythingllmRouteName: "anythingllm"
+
+# Public-facing URL shown to users after successful signup.
+# Leaving this empty (default) causes the Helm chart to auto-discover it from the AnythingLLM Route.
+# Set explicitly only if you need to override the auto-discovered value.
 anythingllmExternalUrl: ""
 
 # Git repository settings for the OpenShift BuildConfig

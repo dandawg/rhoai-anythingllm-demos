@@ -71,8 +71,6 @@ function SuccessView({ result }: { result: SignupResult }) {
       {result.anythingllmUrl ? (
         <a
           href={result.anythingllmUrl}
-          target="_blank"
-          rel="noopener noreferrer"
           className="btn btn-primary btn-open"
         >
           Open AnythingLLM →

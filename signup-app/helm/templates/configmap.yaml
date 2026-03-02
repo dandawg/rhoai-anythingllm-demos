@@ -7,7 +7,14 @@ metadata:
     app: anythingllm-signup-app
   annotations:
     argocd.argoproj.io/sync-wave: "2"
+{{- $externalUrl := .Values.anythingllmExternalUrl | default "" }}
+{{- if not $externalUrl }}
+{{- $route := lookup "route.openshift.io/v1" "Route" .Values.namespace (.Values.anythingllmRouteName | default "anythingllm") }}
+{{- if and $route $route.spec $route.spec.host }}
+{{- $externalUrl = printf "https://%s" $route.spec.host }}
+{{- end }}
+{{- end }}
 data:
   USER_QUOTA: {{ .Values.userQuota | quote }}
   ANYTHINGLLM_URL: {{ .Values.anythingllmUrl | quote }}
-  ANYTHINGLLM_EXTERNAL_URL: {{ .Values.anythingllmExternalUrl | default "" | quote }}
+  ANYTHINGLLM_EXTERNAL_URL: {{ $externalUrl | quote }}

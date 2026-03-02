@@ -67,7 +67,8 @@ Edit [`gitops/signup-app.yaml`](gitops/signup-app.yaml) and set the following va
 |-------|-------------|
 | `userQuota` | Maximum number of users allowed to sign up (default: `30`) |
 | `anythingllmUrl` | Internal cluster URL for AnythingLLM (default points to `anythingllm.demo-apps.svc.cluster.local:3001`) |
-| `anythingllmExternalUrl` | *(Optional)* Public URL shown to users after signup. Get it with: `oc get route anythingllm -n demo-apps -o jsonpath='{.spec.host}'` — prefix with `https://` |
+| `anythingllmRouteName` | Name of the AnythingLLM OpenShift Route to auto-discover the public URL from (default: `anythingllm`) |
+| `anythingllmExternalUrl` | *(Optional)* Overrides the auto-discovered URL. Leave blank to let the Helm chart look up the Route automatically. |
 | `git.repoURL` | Git repo URL (update if you've forked this repo) |
 
 Example snippet:
