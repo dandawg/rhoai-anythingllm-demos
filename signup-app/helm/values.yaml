@@ -1,0 +1,37 @@
+# Namespace where AnythingLLM is running (and where this app will be deployed)
+namespace: demo-apps
+
+# Maximum number of users allowed to sign up (includes all existing users)
+userQuota: 30
+
+# Internal cluster URL for the AnythingLLM service
+# Update this to match your AnythingLLM service name and namespace
+anythingllmUrl: "http://anythingllm.demo-apps.svc.cluster.local:3001"
+
+# Name of the AnythingLLM OpenShift Route (used to auto-discover the public URL at deploy time)
+anythingllmRouteName: "anythingllm"
+
+# Public-facing URL shown to users after successful signup.
+# Leaving this empty (default) causes the Helm chart to auto-discover it from the AnythingLLM Route.
+# Set explicitly only if you need to override the auto-discovered value.
+anythingllmExternalUrl: ""
+
+# Git repository settings for the OpenShift BuildConfig
+git:
+  repoURL: "https://github.com/dandawg/rhoai-anythingllm-demos.git"
+  ref: signup-app
+  contextDir: signup-app
+
+# Container image settings (references the in-cluster ImageStream)
+image:
+  name: anythingllm-signup-app
+  tag: latest
+
+# Resource limits for the signup app pod
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"

@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anythingllm-signup-app
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: anythingllm-signup-app
+    app.kubernetes.io/part-of: rhoai-demos
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+    targetRevision: main
+    path: signup-app/helm
+    helm:
+      values: |
+        namespace: demo-apps
+        userQuota: 30
+
+        # Internal cluster URL for AnythingLLM — update if your service name differs
+        anythingllmUrl: "http://anythingllm.demo-apps.svc.cluster.local:3001"
+
+        # Public URL shown to users after signup.
+        # Leave unset — the app discovers this automatically from the AnythingLLM Route at startup.
+        # Set only if you need to override: anythingllmExternalUrl: "https://anythingllm-demo-apps.apps.your-cluster.example.com"
+
+        git:
+          repoURL: "https://github.com/dandawg/rhoai-anythingllm-demos.git"
+          ref: main
+          contextDir: signup-app
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  ignoreDifferences:
+    # OpenShift Route status is managed by the router controller
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers:
+        - /status
+    # BuildConfig lastVersion and status change with each build run
+    - group: build.openshift.io
+      kind: BuildConfig
+      jsonPointers:
+        - /status
+        - /spec/triggers
+    # Individual Build objects are created by the BuildConfig trigger, not by ArgoCD.
+    # Ignoring them prevents self-heal loops when a build fails or is in progress.
+    - group: build.openshift.io
+      kind: Build
+      jsonPointers:
+        - /status
+    # The Deployment image field is intentionally left as a placeholder (" ") in the
+    # Helm chart. OpenShift's ImageStream trigger controller overwrites it with the
+    # actual image SHA after each build. ArgoCD must not treat this as drift.
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - '.spec.template.spec.containers[] | select(.name == "anythingllm-signup-app").image'

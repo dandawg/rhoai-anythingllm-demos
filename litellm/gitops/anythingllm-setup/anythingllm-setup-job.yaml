@@ -88,6 +88,53 @@ spec:
                 do_login
               fi
 
+              # ── Generate API key and save to secret (idempotent) ─────────────
+              K8S_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              K8S_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+              K8S_API="https://kubernetes.default.svc"
+              K8S_CACERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+              echo "Checking for existing API key in anythingllm-admin secret..."
+              SECRET_HTTP=$(curl -s -o /tmp/secret_resp.txt -w "%{http_code}" \
+                --cacert "${K8S_CACERT}" \
+                -H "Authorization: Bearer ${K8S_TOKEN}" \
+                "${K8S_API}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/anythingllm-admin")
+
+              EXISTING_KEY=$(grep -o '"ANYTHINGLLM_API_KEY"' /tmp/secret_resp.txt || true)
+              if [ -n "${EXISTING_KEY}" ]; then
+                echo "API key already present in secret — skipping generation."
+              else
+                echo "Generating new AnythingLLM API key..."
+                APIKEY_HTTP=$(curl -s -o /tmp/apikey_resp.txt -w "%{http_code}" \
+                  -X POST "${ANYTHINGLLM_URL}/api/admin/generate-api-key" \
+                  -H "Authorization: Bearer ${JWT}" \
+                  -H "Content-Type: application/json")
+                if [ "${APIKEY_HTTP}" != "200" ] && [ "${APIKEY_HTTP}" != "201" ]; then
+                  echo "ERROR: Failed to generate API key (HTTP ${APIKEY_HTTP}):"
+                  cat /tmp/apikey_resp.txt
+                  exit 1
+                fi
+                API_KEY=$(cat /tmp/apikey_resp.txt | grep -o '"secret":"[^"]*"' | sed 's/"secret":"//;s/"//')
+                if [ -z "${API_KEY}" ]; then
+                  echo "ERROR: Could not extract API key from response:"
+                  cat /tmp/apikey_resp.txt
+                  exit 1
+                fi
+                API_KEY_B64=$(echo -n "${API_KEY}" | base64)
+                PATCH_HTTP=$(curl -s -o /tmp/patch_resp.txt -w "%{http_code}" \
+                  -X PATCH "${K8S_API}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/anythingllm-admin" \
+                  --cacert "${K8S_CACERT}" \
+                  -H "Authorization: Bearer ${K8S_TOKEN}" \
+                  -H "Content-Type: application/strategic-merge-patch+json" \
+                  -d "{\"data\":{\"ANYTHINGLLM_API_KEY\":\"${API_KEY_B64}\"}}")
+                if [ "${PATCH_HTTP}" != "200" ]; then
+                  echo "ERROR: Failed to patch anythingllm-admin secret (HTTP ${PATCH_HTTP}):"
+                  cat /tmp/patch_resp.txt
+                  exit 1
+                fi
+                echo "API key saved to anythingllm-admin secret."
+              fi
+
               # ── Idempotency check ────────────────────────────────────────────
               echo "Checking for existing workspaces..."
               WORKSPACES=$(curl -sf "${ANYTHINGLLM_URL}/api/workspaces" \

@@ -1,0 +1,20 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: anythingllm-signup-app
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: anythingllm-signup-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  to:
+    kind: Service
+    name: anythingllm-signup-app
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

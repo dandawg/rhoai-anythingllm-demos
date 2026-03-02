@@ -1,0 +1,39 @@
+---
+description: ArgoCD + OpenShift BuildConfig have independent git pointers that must both be updated when changing branches
+globs: signup-app/gitops/*.yaml,signup-app/helm/values.yaml
+alwaysApply: false
+---
+
+# ArgoCD + BuildConfig: Two Independent Git Pointers
+
+When this app is deployed from a non-`main` branch, two separate git references must be kept in sync:
+
+| Pointer | Location | Controls |
+|---------|----------|----------|
+| `spec.source.targetRevision` | `gitops/signup-app.yaml` | Which branch ArgoCD reads the Helm chart from |
+| `git.ref` (Helm value) | `gitops/signup-app.yaml` + `helm/values.yaml` | Which branch the **BuildConfig** clones for the Docker build |
+
+These are independent. ArgoCD finding the Helm chart on a branch does NOT automatically tell the BuildConfig to clone from that same branch.
+
+## Symptom
+
+Build pod fails with:
+```
+error: provided context directory does not exist: signup-app
+```
+
+This means the BuildConfig cloned the wrong branch (e.g. `main`) where `signup-app/` doesn't exist yet.
+
+## Fix
+
+Ensure both values match the working branch in `gitops/signup-app.yaml`:
+
+```yaml
+source:
+  targetRevision: signup-app   # ← ArgoCD reads Helm chart from here
+  helm:
+    values: |
+      git:
+        ref: signup-app        # ← BuildConfig clones from here — must match!
+        contextDir: signup-app
+```

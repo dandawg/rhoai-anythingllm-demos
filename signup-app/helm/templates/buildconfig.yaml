@@ -1,0 +1,29 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ .Values.image.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: anythingllm-signup-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    # Prevent ArgoCD from pruning the BuildConfig when a build is in progress.
+    # Prevent ArgoCD from replacing it on re-sync (which would cancel in-flight builds).
+    argocd.argoproj.io/sync-options: "Prune=false"
+spec:
+  source:
+    type: Git
+    git:
+      uri: {{ .Values.git.repoURL }}
+      ref: {{ .Values.git.ref }}
+    contextDir: {{ .Values.git.contextDir }}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
+  triggers:
+    - type: ConfigChange
