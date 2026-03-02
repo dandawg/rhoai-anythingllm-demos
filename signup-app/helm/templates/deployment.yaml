@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anythingllm-signup-app
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: anythingllm-signup-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    # Triggers a rolling update when the ImageStream tag is updated by a new build
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"{{ .Values.image.name }}:{{ .Values.image.tag }}","namespace":"{{ .Values.namespace }}"},"fieldPath":"spec.template.spec.containers[?(@.name==\"anythingllm-signup-app\")].image","pause":"false"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anythingllm-signup-app
+  template:
+    metadata:
+      labels:
+        app: anythingllm-signup-app
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: anythingllm-signup-app
+          image: " "
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: anythingllm-signup-config
+            - secretRef:
+                name: anythingllm-signup-secret
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30

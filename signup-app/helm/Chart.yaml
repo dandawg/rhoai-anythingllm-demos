@@ -1,0 +1,12 @@
+apiVersion: v2
+name: anythingllm-signup-app
+description: Self-service signup app for AnythingLLM demo deployments
+type: application
+version: 1.0.0
+appVersion: "latest"
+keywords:
+  - anythingllm
+  - demo
+  - signup
+maintainers:
+  - name: Red Hat AI Americas

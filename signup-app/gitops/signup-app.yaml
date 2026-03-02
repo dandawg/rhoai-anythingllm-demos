@@ -1,0 +1,65 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anythingllm-signup-app
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: anythingllm-signup-app
+    app.kubernetes.io/part-of: rhoai-demos
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+    targetRevision: signup-app
+    path: signup-app/helm
+    helm:
+      values: |
+        namespace: demo-apps
+        userQuota: 30
+
+        # Internal cluster URL for AnythingLLM — update if your service name differs
+        anythingllmUrl: "http://anythingllm.demo-apps.svc.cluster.local:3001"
+
+        # Public URL shown to users after signup (get with: oc get route anythingllm -n demo-apps -o jsonpath='{.spec.host}')
+        # anythingllmExternalUrl: "https://anythingllm-demo-apps.apps.your-cluster.example.com"
+
+        git:
+          repoURL: "https://github.com/dandawg/rhoai-anythingllm-demos.git"
+          ref: signup-app
+          contextDir: signup-app
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  ignoreDifferences:
+    # OpenShift Route status is managed by the router controller
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers:
+        - /status
+    # BuildConfig lastVersion and status change with each build run
+    - group: build.openshift.io
+      kind: BuildConfig
+      jsonPointers:
+        - /status
+        - /spec/triggers
+    # Individual Build objects are created by the BuildConfig trigger, not by ArgoCD.
+    # Ignoring them prevents self-heal loops when a build fails or is in progress.
+    - group: build.openshift.io
+      kind: Build
+      jsonPointers:
+        - /status
