@@ -18,3 +18,4 @@ data:
   USER_QUOTA: {{ .Values.userQuota | quote }}
   ANYTHINGLLM_URL: {{ .Values.anythingllmUrl | quote }}
   ANYTHINGLLM_EXTERNAL_URL: {{ $externalUrl | quote }}
+  ANYTHINGLLM_ROUTE_NAME: {{ .Values.anythingllmRouteName | default "anythingllm" | quote }}

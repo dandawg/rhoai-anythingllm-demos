@@ -15,9 +15,48 @@ logger = logging.getLogger(__name__)
 ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://anythingllm:3001")
 ANYTHINGLLM_API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "")
 ANYTHINGLLM_EXTERNAL_URL = os.getenv("ANYTHINGLLM_EXTERNAL_URL", "")
+ANYTHINGLLM_ROUTE_NAME = os.getenv("ANYTHINGLLM_ROUTE_NAME", "anythingllm")
 USER_QUOTA = int(os.getenv("USER_QUOTA", "30"))
 
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{3,32}$")
+
+# Resolved at startup — either from env var or K8s API discovery
+_anythingllm_external_url: str = ""
+
+
+def _discover_route_url() -> str:
+    """
+    Query the OpenShift Route for AnythingLLM via the in-cluster Kubernetes API.
+    Requires the pod's service account to have 'get' on routes/<name>.
+    Returns an empty string if discovery fails or we're not running in-cluster.
+    """
+    token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    ns_file = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+    ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+    if not os.path.exists(token_file):
+        logger.debug("Not running in-cluster; skipping route discovery.")
+        return ""
+
+    try:
+        token = open(token_file).read().strip()
+        namespace = open(ns_file).read().strip()
+        url = (
+            f"https://kubernetes.default.svc"
+            f"/apis/route.openshift.io/v1/namespaces/{namespace}/routes/{ANYTHINGLLM_ROUTE_NAME}"
+        )
+        resp = httpx.get(url, headers={"Authorization": f"Bearer {token}"}, verify=ca_file, timeout=5.0)
+        if resp.status_code == 200:
+            host = resp.json().get("spec", {}).get("host", "")
+            if host:
+                discovered = f"https://{host}"
+                logger.info("Discovered AnythingLLM URL from route: %s", discovered)
+                return discovered
+        logger.warning("Route lookup returned %d; AnythingLLM URL will not be shown.", resp.status_code)
+    except Exception as exc:
+        logger.warning("Route discovery failed: %s", exc)
+
+    return ""
 
 
 def allm_headers() -> dict:
@@ -29,11 +68,14 @@ def allm_headers() -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _anythingllm_external_url
+    # Prefer explicit env var; fall back to live route discovery
+    _anythingllm_external_url = ANYTHINGLLM_EXTERNAL_URL or _discover_route_url()
     logger.info(
         "Startup: ANYTHINGLLM_URL=%s  USER_QUOTA=%d  external_url=%s",
         ANYTHINGLLM_URL,
         USER_QUOTA,
-        ANYTHINGLLM_EXTERNAL_URL or "(not set)",
+        _anythingllm_external_url or "(not set — link will not be shown)",
     )
     yield
 
@@ -195,7 +237,7 @@ async def signup(req: SignupRequest):
             "success": True,
             "username": req.username,
             "workspaceName": workspace_name,
-            "anythingllmUrl": ANYTHINGLLM_EXTERNAL_URL,
+            "anythingllmUrl": _anythingllm_external_url,
         }
 
 

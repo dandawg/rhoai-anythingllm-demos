@@ -20,6 +20,7 @@ spec:
       labels:
         app: anythingllm-signup-app
     spec:
+      serviceAccountName: anythingllm-signup-app
       securityContext:
         runAsNonRoot: true
         seccompProfile:

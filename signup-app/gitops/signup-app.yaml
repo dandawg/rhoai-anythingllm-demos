@@ -21,8 +21,9 @@ spec:
         # Internal cluster URL for AnythingLLM — update if your service name differs
         anythingllmUrl: "http://anythingllm.demo-apps.svc.cluster.local:3001"
 
-        # Public URL shown to users after signup (get with: oc get route anythingllm -n demo-apps -o jsonpath='{.spec.host}')
-        # anythingllmExternalUrl: "https://anythingllm-demo-apps.apps.your-cluster.example.com"
+        # Public URL shown to users after signup.
+        # Leave unset — the app discovers this automatically from the AnythingLLM Route at startup.
+        # Set only if you need to override: anythingllmExternalUrl: "https://anythingllm-demo-apps.apps.your-cluster.example.com"
 
         git:
           repoURL: "https://github.com/dandawg/rhoai-anythingllm-demos.git"
