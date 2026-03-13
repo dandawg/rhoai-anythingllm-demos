@@ -270,6 +270,18 @@ The openshift-infra repo can also be used standalone for infrastructure provisio
 
 ### MachineSet Deployment Issues
 
+**MachineSets showing `OutOfSync` in ArgoCD after applying the bootstrap**
+
+The machineset Applications require cluster-specific Helm parameters (`infraID`, `clusterName`, `availabilityZone`, `amiId`) that can only be discovered at runtime. These Applications do not auto-sync — they wait for the parameters to be injected by the deployment script.
+
+If you applied the bootstrap before running the machinesets script, simply run the script now:
+
+```bash
+./scripts/deploy-machinesets.sh
+```
+
+The script will configure the parameters and trigger a sync. The bootstrap app-of-apps manages these Application objects, so you must use the script (not manual ArgoCD syncs) to ensure the parameters are set correctly before syncing.
+
 **Script fails: "Failed to retrieve cluster information"**
 
 Not logged into OpenShift or not running on AWS:

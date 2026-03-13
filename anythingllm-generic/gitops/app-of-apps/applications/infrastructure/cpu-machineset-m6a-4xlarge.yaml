@@ -22,9 +22,6 @@ spec:
     server: https://kubernetes.default.svc
     namespace: openshift-machine-api
   syncPolicy:
-    automated:
-      selfHeal: false
-      prune: true
     syncOptions:
       - CreateNamespace=false
     retry:
