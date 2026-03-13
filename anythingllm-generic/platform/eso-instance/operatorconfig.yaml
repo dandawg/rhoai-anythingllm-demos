@@ -1,0 +1,9 @@
+apiVersion: operator.external-secrets.io/v1alpha1
+kind: OperatorConfig
+metadata:
+  name: cluster
+  namespace: external-secrets-system
+spec: {}
+  # Minimal config to deploy External Secrets controllers
+  # The helm-operator will deploy the actual ESO controllers
+  # based on this OperatorConfig
