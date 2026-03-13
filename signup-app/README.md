@@ -93,6 +93,28 @@ helm:
 oc apply -f signup-app/gitops/signup-app.yaml
 ```
 
+### Alternative: Deploy with inline overrides (no file edits)
+
+Use `argocd app create --upsert` with `--helm-set` flags to deploy without modifying any files — useful for quick testing:
+
+```bash
+argocd app create anythingllm-signup-app \
+  --repo https://github.com/dandawg/rhoai-anythingllm-demos.git \
+  --revision signup-app \
+  --path signup-app/helm \
+  --dest-server https://kubernetes.default.svc \
+  --project default \
+  --helm-set userQuota=25 \
+  --helm-set anythingllmUrl=http://anythingllm.demo-apps.svc.cluster.local:3001 \
+  --helm-set anythingllmExternalUrl=https://anythingllm-demo-apps.apps.your-cluster.example.com \
+  --helm-set git.repoURL=https://github.com/dandawg/rhoai-anythingllm-demos.git \
+  --helm-set git.ref=signup-app \
+  --sync-policy automated \
+  --upsert
+```
+
+The `--upsert` flag creates the Application if it doesn't exist, or updates it in place if it does. `--helm-set` values override `values.yaml` without touching the file. Note that the `anythingllm-signup-secret` must still be created manually before deploying (see [Step 2](#step-2--create-the-secret)).
+
 ArgoCD will:
 1. Create the ImageStream and BuildConfig (sync wave 1–2)
 2. Trigger an in-cluster Docker build from this Git repo

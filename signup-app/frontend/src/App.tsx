@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 // Types
 // ---------------------------------------------------------------------------
 
-interface QuotaInfo {
+export interface QuotaInfo {
   used: number
   quota: number
   available: number
@@ -23,7 +23,7 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error'
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function QuotaSkeleton() {
+export function QuotaSkeleton() {
   return (
     <div className="quota-card quota-skeleton">
       <div className="skeleton-line short" />
@@ -34,7 +34,7 @@ function QuotaSkeleton() {
   )
 }
 
-function QuotaBar({ quota }: { quota: QuotaInfo }) {
+export function QuotaBar({ quota }: { quota: QuotaInfo }) {
   const pct = quota.quota > 0 ? Math.min(100, (quota.used / quota.quota) * 100) : 0
   const isFull = quota.available === 0
   const isWarning = !isFull && pct >= 80
@@ -146,7 +146,6 @@ const USERNAME_RE = /^[a-zA-Z0-9_-]{3,32}$/
 
 export default function App() {
   const [quota, setQuota] = useState<QuotaInfo | null>(null)
-  const [quotaLoading, setQuotaLoading] = useState(true)
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -159,14 +158,11 @@ export default function App() {
   const [signupResult, setSignupResult] = useState<SignupResult | null>(null)
 
   const fetchQuota = useCallback(async () => {
-    setQuotaLoading(true)
     try {
       const res = await fetch('/api/quota')
       if (res.ok) setQuota(await res.json())
     } catch {
-      // non-fatal; quota display just won't show
-    } finally {
-      setQuotaLoading(false)
+      // non-fatal
     }
   }, [])
 
@@ -243,11 +239,6 @@ export default function App() {
           <h1 className="card-title">AnythingLLM Demo Access</h1>
           <p className="card-subtitle">Create your personal AI workspace</p>
         </header>
-
-        {/* Quota */}
-        <div className="quota-section">
-          {quotaLoading ? <QuotaSkeleton /> : quota ? <QuotaBar quota={quota} /> : null}
-        </div>
 
         {/* Body */}
         {formState === 'success' && signupResult ? (
