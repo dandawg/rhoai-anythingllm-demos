@@ -1,24 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: rhoai-dependencies
+  name: nfd-instance
   namespace: openshift-gitops
   labels:
-    app.kubernetes.io/name: rhoai-dependencies
+    app.kubernetes.io/name: nfd-instance
     app.kubernetes.io/part-of: rhoai-demos
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: rhoai-infrastructure
-  
+  project: rhoai-platform
+
   source:
     repoURL: https://github.com/dandawg/rhoai-deploy.git
     targetRevision: main
-    path: platform/rhoai-operator/dependencies
-  
+    path: platform/rhoai-operator/nfd-instance
+
   destination:
     server: https://kubernetes.default.svc
-  
+
   syncPolicy:
     automated:
       selfHeal: true
@@ -28,7 +28,7 @@ spec:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
     retry:
-      limit: 5
+      limit: 10
       backoff:
         duration: 30s
         factor: 2
