@@ -6,10 +6,12 @@ set -e
 #
 # For detailed documentation, see: ../README.md
 # Quick usage:
-#   ./deploy-machinesets.sh              # Deploy all machinesets
-#   ./deploy-machinesets.sh --cpu-only   # Deploy only CPU
-#   ./deploy-machinesets.sh --gpu-only   # Deploy only GPU
-#   ./deploy-machinesets.sh --help       # Show full help
+#   ./deploy-machinesets.sh                       # Deploy all machinesets
+#   ./deploy-machinesets.sh --cpu-only            # Deploy only CPU
+#   ./deploy-machinesets.sh --gpu-only            # Deploy only GPU
+#   ./deploy-machinesets.sh --gpu-type g6e.12xlarge  # Deploy 4x L40S node
+#   ./deploy-machinesets.sh --list                # List available GPU types
+#   ./deploy-machinesets.sh --help                # Show full help
 
 # Parse command line arguments
 DEPLOY_CPU=true
@@ -22,8 +24,9 @@ print_usage() {
   echo "Options:"
   echo "  --cpu-only          Deploy only CPU machineset"
   echo "  --gpu-only          Deploy only GPU machinesets"
-  echo "  --gpu-type TYPE     Deploy specific GPU type (g6e.2xlarge or g6.2xlarge)"
+  echo "  --gpu-type TYPE     Deploy specific GPU type (g6e.2xlarge, g6e.12xlarge, or g6.2xlarge)"
   echo "                      Can be specified multiple times"
+  echo "  --list              List available GPU types with specs and exit"
   echo "  --help              Show this help message"
   echo ""
   echo "Environment Variables:"
@@ -35,10 +38,40 @@ print_usage() {
   echo "  REPLICA_COUNT       Number of replicas (default: 1)"
   echo ""
   echo "Examples:"
-  echo "  $0                           # Deploy all machinesets"
-  echo "  $0 --cpu-only                # Deploy only CPU"
-  echo "  $0 --gpu-type g6.2xlarge     # Deploy only g6 GPU (0 replicas, for FLUX.2 add-on)"
-  echo "  REPLICA_COUNT=2 $0           # Deploy with 2 replicas each"
+  echo "  $0                              # Deploy all machinesets (CPU + default GPU types)"
+  echo "  $0 --cpu-only                   # Deploy only CPU"
+  echo "  $0 --gpu-type g6e.2xlarge       # Deploy only g6e.2xlarge GPU"
+  echo "  $0 --gpu-type g6e.12xlarge      # Deploy only g6e.12xlarge GPU (4x L40S)"
+  echo "  $0 --gpu-type g6.2xlarge        # Deploy only g6 GPU (0 replicas, for FLUX.2 add-on)"
+  echo "  REPLICA_COUNT=2 $0              # Deploy with 2 replicas each"
+  echo "  $0 --list                       # Show available GPU types"
+}
+
+print_gpu_list() {
+  echo "Available GPU MachineSet Types"
+  echo "=============================="
+  echo ""
+  echo "DEFAULT (deployed by ./deploy-machinesets.sh with no flags):"
+  echo ""
+  echo "  g6e.2xlarge    1x NVIDIA L40S  48GB VRAM   8 vCPU   64GB RAM   ~\$2.24/hr"
+  echo "                 → Primary LLM node (qwen3-vl-8b)"
+  echo ""
+  echo "  g6.2xlarge     1x NVIDIA L4    24GB VRAM   8 vCPU   32GB RAM   ~\$1.10/hr"
+  echo "                 → Deployed at 0 replicas; scale up for FLUX.2 add-on"
+  echo ""
+  echo "AVAILABLE (deploy with --gpu-type <type>):"
+  echo ""
+  echo "  g6e.12xlarge   4x NVIDIA L40S  192GB VRAM  48 vCPU  384GB RAM  ~\$10.49/hr"
+  echo "                 → Multi-GPU node for large model sharding / tensor-parallel inference"
+  echo ""
+  echo "  g6.2xlarge     (see above)"
+  echo "  g6e.2xlarge    (see above)"
+  echo ""
+  echo "CPU:"
+  echo ""
+  echo "  m6a.4xlarge    No GPU          —           16 vCPU  64GB RAM   ~\$0.69/hr"
+  echo "                 → RHOAI platform pods"
+  echo ""
 }
 
 # Parse arguments
@@ -55,6 +88,10 @@ while [[ $# -gt 0 ]]; do
     --gpu-type)
       GPU_TYPES+=("$2")
       shift 2
+      ;;
+    --list)
+      print_gpu_list
+      exit 0
       ;;
     --help)
       print_usage
@@ -222,6 +259,15 @@ if [ "$DEPLOY_GPU" = true ]; then
           "g6e.2xlarge" \
           "g6e"
         ;;
+      "g6e.12xlarge")
+        # Deployed at 0 replicas by default; scale up manually for large multi-GPU workloads
+        deploy_machineset \
+          "gpu-machineset-g6e-12xlarge" \
+          "$REPO_ROOT/anythingllm-generic/gitops/app-of-apps/applications/infrastructure/gpu-machineset-g6e-12xlarge.yaml" \
+          "g6e.12xlarge" \
+          "g6e-12xl" \
+          "0"
+        ;;
       "g6.2xlarge")
         # Deployed at 0 replicas by default; scale up manually when using the FLUX.2 optional add-on
         deploy_machineset \
@@ -233,6 +279,7 @@ if [ "$DEPLOY_GPU" = true ]; then
         ;;
       *)
         echo "Warning: Unsupported GPU type '$GPU_TYPE'. Skipping."
+        echo "  Run '$0 --list' to see available GPU types."
         ;;
     esac
   done

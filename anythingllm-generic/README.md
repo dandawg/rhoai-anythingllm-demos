@@ -4,16 +4,26 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 
 ## What This Deploys
 
-- GPU-enabled OpenShift infrastructure:
-  - g6e.2xlarge GPU node (NVIDIA L40S, 48GB) - for qwen3-vl-8b LLM and FLUX.2-klein-9B (optional)
-  - g4dn.xlarge GPU node (NVIDIA T4, 16GB) - for qwen3-vl-embedding-2b
-  - g6.2xlarge GPU node (NVIDIA L4, 24GB) - spare capacity (MachineSet deployed at scale 0)
-  - m6a.4xlarge CPU node (16 vCPU, 64GB RAM) - for RHOAI pod support
+- GPU-enabled OpenShift infrastructure (deployed by default):
+  - **g6e.2xlarge** GPU node (1x NVIDIA L40S, 48GB VRAM, ~$2.24/hr) — for qwen3-vl-8b LLM and FLUX.2-klein-9B (optional)
+  - **g6.2xlarge** GPU node (1x NVIDIA L4, 24GB VRAM, ~$1.10/hr) — spare capacity (MachineSet deployed at scale 0; scale up for FLUX.2 add-on)
+  - **m6a.4xlarge** CPU node (16 vCPU, 64GB RAM, ~$0.69/hr) — for RHOAI pod support
 - RHOAI platform with dependencies (NFD, NVIDIA GPU Operator)
 - vLLM-Omni serving runtime (general-purpose; supports LLMs and diffusion image generation models)
 - Model serving: qwen3-vl-8b (LLM) + qwen3-vl-embedding-2b (embeddings)
 - External Secrets Operator for automatic token discovery
 - AnythingLLM application pre-configured with model endpoints
+
+**Also available (not deployed by default):**
+- **g6e.12xlarge** GPU node (4x NVIDIA L40S, 192GB total VRAM, 48 vCPU, 384 GiB RAM, ~$10.49/hr) — MachineSet deployed at scale 0; scale up manually for large multi-GPU / tensor-parallel inference workloads
+
+```bash
+# Deploy the 4x L40S node instead of (or in addition to) the default g6e.2xlarge
+./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
+
+# See all available GPU types with specs
+./scripts/deploy-machinesets.sh --list
+```
 
 **Optional add-on:** FLUX.2-klein-9B image generation model (requires HuggingFace token — see [Optional Add-ons](#optional-add-ons))
 
@@ -25,7 +35,8 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 ✅ `oc` and `argocd` CLI tools installed  
 ✅ OpenShift GitOps (ArgoCD) installed - Run `../bootstrap.sh` if not installed  
 ✅ Cluster admin access  
-✅ Available AWS capacity for g6e.2xlarge (GPU) and m6a.4xlarge (CPU) instances
+✅ Available AWS capacity for g6e.2xlarge (GPU) and m6a.4xlarge (CPU) instances  
+✅ For large model workloads: available AWS capacity for g6e.12xlarge (4x L40S, 192GB VRAM, 384 GiB RAM, optional)
 
 ### Install OpenShift GitOps (if needed)
 
@@ -44,12 +55,16 @@ cd anythingllm-generic
 **Important**: MachineSets must be deployed first using the deployment script:
 
 ```bash
-# Deploy all machinesets (1 CPU + 1 GPU type)
+# Deploy all machinesets (CPU + default GPU types: g6e.2xlarge + g6.2xlarge)
 ./scripts/deploy-machinesets.sh
 
-# Or deploy selectively
-# ./scripts/deploy-machinesets.sh --cpu-only
-# ./scripts/deploy-machinesets.sh --gpu-type g6e.2xlarge
+# List available GPU types with specs
+./scripts/deploy-machinesets.sh --list
+
+# Deploy selectively
+./scripts/deploy-machinesets.sh --cpu-only
+./scripts/deploy-machinesets.sh --gpu-type g6e.2xlarge
+./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge   # 4x L40S, ~$10.50/hr
 
 # Override specific values if needed
 AVAILABILITY_ZONE=us-east-1b ./scripts/deploy-machinesets.sh
@@ -243,11 +258,12 @@ The deployment uses ArgoCD sync waves to orchestrate installation:
 
 **Prerequisites (run script first):**
 - MachineSets (deployed via `./scripts/deploy-machinesets.sh`)
-  - g6e.2xlarge (1 replica) — qwen3-vl-8b LLM
-  - g4dn.xlarge (1 replica) — qwen3-vl-embedding-2b
-  - g6.2xlarge (0 replicas) — spare L4 capacity
-
-  - m6a.4xlarge (1 replica) — RHOAI platform pods
+  - **Default:**
+    - g6e.2xlarge (1 replica) — qwen3-vl-8b LLM (1x L40S, 48GB, ~$2.24/hr)
+    - g6.2xlarge (0 replicas) — spare L4 capacity for FLUX.2 add-on (~$1.10/hr)
+    - m6a.4xlarge (1 replica) — RHOAI platform pods (~$0.69/hr)
+  - **Available (use `--gpu-type`):**
+    - g6e.12xlarge (0 replicas) — large multi-GPU inference (4x L40S, 192GB VRAM, 384 GiB RAM, ~$10.49/hr)
 
 **GitOps Deployment (after MachineSets):**
 - **Wave -1**: Cleanup hooks (PreDelete)
