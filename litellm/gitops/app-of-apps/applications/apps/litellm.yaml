@@ -28,6 +28,11 @@ spec:
           # If the secret does not exist the LiteLLM pod will fail to start.
           existingSecret: "litellm-master-key"
 
+        postgres:
+          enabled: true
+          # POSTGRES_PASSWORD is supplied via the litellm-master-key pre-created Secret.
+          # Do not set it here; it must be present in that Secret (see README).
+
         litellm:
           config: |
             model_list:

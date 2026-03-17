@@ -7,7 +7,7 @@ This folder contains only the demo-specific GitOps wiring. The generic LiteLLM H
 ## What This Deploys
 
 - LiteLLM proxy pre-configured with both RHOAI models via `model_list`
-- SQLite backend (ephemeral, reloads from config on restart — no Postgres needed)
+- Bundled PostgreSQL backend — required for the admin UI, virtual key management, and spend tracking
 - Model API keys resolved at runtime from the existing `model-api-tokens` ESO secret
 - `litellm-consumer` Secret in `demo-apps` auto-created by a PostSync hook; holds a **scoped virtual key** (`LITELLM_API_KEY`) and `LITELLM_API_BASE` for downstream consumers — does not contain the master key
 - OpenShift Route with edge TLS
@@ -23,16 +23,20 @@ This demo add-on assumes the main `anythingllm-generic` demo is already deployed
 
 ## Pre-flight: Create the Master Key Secret
 
-The deployment reads `LITELLM_MASTER_KEY` from a Kubernetes Secret named `litellm-master-key` in the `demo-apps` namespace. **This secret must exist before you run `oc apply`.** If it is absent, the LiteLLM pod will fail to start with a `CreateContainerConfigError`, blocking the deployment until the secret is in place.
+The deployment reads `LITELLM_MASTER_KEY` **and** `POSTGRES_PASSWORD` from a Kubernetes Secret named `litellm-master-key` in the `demo-apps` namespace. **Both values must be present before you run `oc apply`.** If the secret is absent the LiteLLM pod will fail to start with a `CreateContainerConfigError`, blocking the deployment until the secret is in place.
 
 ```bash
-# Generate a random master key and create the secret
+# Generate a random master key and database password, then create the secret
+LITELLM_MASTER_KEY="sk-$(openssl rand -hex 16)"
+POSTGRES_PASSWORD="$(openssl rand -hex 16)"
+
 oc create secret generic litellm-master-key \
   --namespace demo-apps \
-  --from-literal=LITELLM_MASTER_KEY="sk-$(openssl rand -hex 16)"
+  --from-literal=LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}" \
+  --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
 ```
 
-> **Keep this key private.** It grants full admin access to the LiteLLM dashboard and key-management API. Downstream consumers (e.g. AnythingLLM) **never** receive this key — they get a scoped virtual key instead (see below).
+> **Keep these values private.** `LITELLM_MASTER_KEY` grants full admin access to the LiteLLM dashboard and key-management API. Downstream consumers (e.g. AnythingLLM) **never** receive this key — they get a scoped virtual key instead (see below).
 
 ## How Consumer Access Works
 
@@ -44,7 +48,7 @@ After the LiteLLM pod becomes healthy, an ArgoCD **PostSync hook Job** automatic
 
 Downstream applications mount `litellm-consumer` to get `LITELLM_API_KEY` and `LITELLM_API_BASE` without ever seeing the master key. If the Job has not yet run (e.g. first deployment is still in progress), downstream pods will fail to start until the secret is available — which is intentional.
 
-> **SQLite note:** The default backend is ephemeral SQLite. Virtual keys stored in LiteLLM's DB are lost when the pod restarts. After a restart, delete the `litellm-consumer` secret and re-sync the `litellm-consumer-setup` ArgoCD Application to regenerate it.
+> **After a pod restart:** Virtual keys in Postgres survive restarts, so `litellm-consumer` stays valid. If you ever need to rotate the virtual key, delete `litellm-consumer` and re-sync the `litellm-consumer-setup` ArgoCD Application.
 
 ## Deployment
 
@@ -65,7 +69,7 @@ ArgoCD will sync in waves starting at wave 41, after the existing ESO secrets (w
    - `model_list` pointing at both RHOAI InferenceService cluster-internal URLs
    - `api_key: "os.environ/QWEN3_VL_8B_API_KEY"` and `os.environ/QWEN35_27B_FP8_API_KEY` for runtime key injection
    - `envFrom` mounting `model-api-tokens` (managed by ESO) into the LiteLLM pod
-3. At startup, LiteLLM reads `config.yaml`, loads both models into SQLite, and resolves the `os.environ/` references from the mounted secret.
+3. At startup, LiteLLM reads `config.yaml`, loads both models into Postgres, and resolves the `os.environ/` references from the mounted secret.
 4. Once healthy, a PostSync hook Job calls `/key/generate` to create a virtual key scoped to both models and writes it into the `litellm-consumer` Secret in `demo-apps`.
 
 ## Downstream Consumption
