@@ -1,0 +1,130 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: litellm-consumer-key-setup
+  namespace: demo-apps
+  annotations:
+    # PostSync: runs after all resources in this Application are synced (RBAC ready).
+    # The Job's readiness wait loop handles LiteLLM startup timing independently.
+    argocd.argoproj.io/hook: PostSync
+    # Delete the previous Job before creating a new one so re-syncs always run fresh.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: litellm-key-setup
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: curlimages/curl:8.7.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+
+              LITELLM_URL="http://litellm.demo-apps.svc:4000"
+              CONSUMER_SECRET_NAME="litellm-consumer"
+              NAMESPACE="demo-apps"
+              MODELS_JSON='["qwen3-vl-8b","qwen35-27b-fp8"]'
+              KEY_ALIAS="anythingllm-consumer"
+
+              K8S_API="https://kubernetes.default.svc"
+              CACERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+
+              # ── Idempotency check ────────────────────────────────────────────
+              # If the consumer secret already has LITELLM_API_KEY, skip key
+              # generation to avoid creating orphaned keys on every re-sync.
+              echo "Checking for existing consumer secret..."
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                "${K8S_API}/api/v1/namespaces/${NAMESPACE}/secrets/${CONSUMER_SECRET_NAME}" \
+                -H "Authorization: Bearer ${SA_TOKEN}" \
+                --cacert "${CACERT}")
+
+              if [ "${HTTP_STATUS}" = "200" ]; then
+                EXISTING=$(curl -s \
+                  "${K8S_API}/api/v1/namespaces/${NAMESPACE}/secrets/${CONSUMER_SECRET_NAME}" \
+                  -H "Authorization: Bearer ${SA_TOKEN}" \
+                  --cacert "${CACERT}" | grep -c '"LITELLM_API_KEY"' || true)
+                if [ "${EXISTING}" -gt 0 ]; then
+                  echo "Consumer secret already contains LITELLM_API_KEY — skipping key generation."
+                  exit 0
+                fi
+              fi
+
+              # ── Wait for LiteLLM readiness ───────────────────────────────────
+              echo "Waiting for LiteLLM to be ready..."
+              ATTEMPTS=0
+              until curl -sf "${LITELLM_URL}/health/readiness" > /dev/null 2>&1; do
+                ATTEMPTS=$((ATTEMPTS + 1))
+                if [ "${ATTEMPTS}" -ge 36 ]; then
+                  echo "ERROR: LiteLLM did not become ready after 6 minutes."
+                  exit 1
+                fi
+                echo "  attempt ${ATTEMPTS}/36 — retrying in 10s..."
+                sleep 10
+              done
+              echo "LiteLLM is ready."
+
+              # ── Generate a scoped virtual key ────────────────────────────────
+              echo "Generating virtual key (alias: ${KEY_ALIAS}, models: ${MODELS_JSON})..."
+              RESPONSE=$(curl -sf -X POST "${LITELLM_URL}/key/generate" \
+                -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"models\":${MODELS_JSON},\"key_alias\":\"${KEY_ALIAS}\",\"duration\":null}")
+
+              VIRTUAL_KEY=$(echo "${RESPONSE}" | grep -o '"key":"sk-[^"]*"' | sed 's/"key":"//;s/"//')
+              if [ -z "${VIRTUAL_KEY}" ]; then
+                echo "ERROR: Could not extract virtual key. Response: ${RESPONSE}"
+                exit 1
+              fi
+              echo "Virtual key generated."
+
+              # ── Write the consumer Secret ────────────────────────────────────
+              API_KEY_B64=$(echo -n "${VIRTUAL_KEY}" | base64 | tr -d '\n')
+              API_BASE_B64=$(echo -n "${LITELLM_URL}" | base64 | tr -d '\n')
+
+              SECRET_JSON="{
+                \"apiVersion\":\"v1\",
+                \"kind\":\"Secret\",
+                \"metadata\":{\"name\":\"${CONSUMER_SECRET_NAME}\",\"namespace\":\"${NAMESPACE}\"},
+                \"data\":{
+                  \"LITELLM_API_KEY\":\"${API_KEY_B64}\",
+                  \"LITELLM_API_BASE\":\"${API_BASE_B64}\"
+                }
+              }"
+
+              echo "Writing secret '${CONSUMER_SECRET_NAME}'..."
+              HTTP_STATUS=$(curl -s -o /tmp/k8s_resp.txt -w "%{http_code}" \
+                -X POST "${K8S_API}/api/v1/namespaces/${NAMESPACE}/secrets" \
+                -H "Authorization: Bearer ${SA_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --cacert "${CACERT}" \
+                -d "${SECRET_JSON}")
+
+              if [ "${HTTP_STATUS}" = "201" ]; then
+                echo "Secret '${CONSUMER_SECRET_NAME}' created."
+              elif [ "${HTTP_STATUS}" = "409" ]; then
+                echo "Secret exists — patching..."
+                PATCH_JSON="{\"data\":{\"LITELLM_API_KEY\":\"${API_KEY_B64}\",\"LITELLM_API_BASE\":\"${API_BASE_B64}\"}}"
+                curl -sf -X PATCH \
+                  "${K8S_API}/api/v1/namespaces/${NAMESPACE}/secrets/${CONSUMER_SECRET_NAME}" \
+                  -H "Authorization: Bearer ${SA_TOKEN}" \
+                  -H "Content-Type: application/merge-patch+json" \
+                  --cacert "${CACERT}" \
+                  -d "${PATCH_JSON}"
+                echo "Secret '${CONSUMER_SECRET_NAME}' patched."
+              else
+                echo "ERROR writing secret: HTTP ${HTTP_STATUS}"
+                cat /tmp/k8s_resp.txt
+                exit 1
+              fi
+
+              echo "Done. Downstream consumers can now use secret '${CONSUMER_SECRET_NAME}'."
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-master-key
+                  key: LITELLM_MASTER_KEY

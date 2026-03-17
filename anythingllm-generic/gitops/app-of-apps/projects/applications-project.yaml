@@ -17,6 +17,7 @@ spec:
   sourceRepos:
     - https://github.com/dandawg/rhoai-anythingllm-demos.git
     - https://github.com/dandawg/anythingllm-on-ocp.git
+    - https://github.com/dandawg/litellm-on-ocp.git
   
   # Allow all resource types (ESO needs cluster-wide resources)
   clusterResourceWhitelist:

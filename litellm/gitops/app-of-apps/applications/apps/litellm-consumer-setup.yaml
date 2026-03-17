@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litellm-consumer-setup
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: litellm-consumer-setup
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    # Wave 45: runs after litellm (wave 41) is fully synced and healthy.
+    # The Job itself waits for LiteLLM readiness before calling /key/generate.
+    argocd.argoproj.io/sync-wave: "45"
+spec:
+  project: rhoai-applications
+
+  source:
+    repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+    targetRevision: main
+    path: litellm/gitops/consumer-key-setup
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo-apps
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m

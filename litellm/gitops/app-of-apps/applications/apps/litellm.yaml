@@ -1,0 +1,78 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litellm
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: litellm
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    argocd.argoproj.io/sync-wave: "41"
+spec:
+  project: rhoai-applications
+
+  source:
+    repoURL: https://github.com/dandawg/litellm-on-ocp.git
+    targetRevision: main
+    path: helm
+    helm:
+      values: |
+        namespace: demo-apps
+
+        image:
+          tag: "v1.82.0-stable.patch5"
+
+        auth:
+          # The master key is supplied via a pre-existing Secret named litellm-master-key.
+          # Create it in demo-apps before running oc apply — see the README.
+          # If the secret does not exist the LiteLLM pod will fail to start.
+          existingSecret: "litellm-master-key"
+
+        litellm:
+          config: |
+            model_list:
+              - model_name: qwen3-vl-8b
+                litellm_params:
+                  model: openai/qwen3-vl-8b
+                  api_base: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+                  api_key: "os.environ/QWEN3_VL_8B_API_KEY"
+              - model_name: qwen35-27b-fp8
+                litellm_params:
+                  model: openai/qwen35-27b-fp8
+                  api_base: "http://qwen35-27b-fp8-predictor.demo.svc.cluster.local:8080/v1"
+                  api_key: "os.environ/QWEN35_27B_FP8_API_KEY"
+            litellm_settings:
+              # Disable TLS verification for RHOAI InferenceService endpoints presenting
+              # self-signed certificates.
+              ssl_verify: false
+            general_settings:
+              store_model_in_db: true
+
+        # Mount the ESO-managed model-api-tokens Secret as environment variables so that
+        # os.environ/QWEN3_VL_8B_API_KEY and os.environ/QWEN35_27B_FP8_API_KEY resolve
+        # at runtime inside the LiteLLM config.
+        envFrom:
+          - secretRef:
+              name: model-api-tokens
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+
+  ignoreDifferences:
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers:
+        - /status
