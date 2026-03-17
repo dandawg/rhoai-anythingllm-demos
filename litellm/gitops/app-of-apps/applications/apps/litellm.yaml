@@ -18,6 +18,7 @@ spec:
     helm:
       values: |
         namespace: demo-apps
+        createNamespace: false
 
         image:
           tag: "v1.82.0-stable.patch5"
@@ -67,8 +68,7 @@ spec:
     automated:
       selfHeal: true
       prune: true
-    syncOptions:
-      - CreateNamespace=true
+    syncOptions: []
     retry:
       limit: 5
       backoff:

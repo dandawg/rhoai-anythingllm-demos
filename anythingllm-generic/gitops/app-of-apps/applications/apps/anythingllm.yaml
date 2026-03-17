@@ -7,7 +7,9 @@ metadata:
     app.kubernetes.io/name: anythingllm
     app.kubernetes.io/part-of: rhoai-demos
   annotations:
-    argocd.argoproj.io/sync-wave: "40"
+    # Wave 46: runs after litellm-consumer-setup (wave 45) has written the
+    # litellm-consumer Secret, so the pod starts with GENERIC_OPEN_AI_API_KEY present.
+    argocd.argoproj.io/sync-wave: "46"
 spec:
   project: rhoai-applications
   
@@ -26,7 +28,8 @@ spec:
           - name: LLM_PROVIDER
             value: "generic-openai"
           - name: GENERIC_OPEN_AI_BASE_PATH
-            value: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+            # value: "http://qwen3-vl-8b-predictor.demo.svc.cluster.local:8080/v1"
+            value: "http://litellm.demo-apps.svc:4000/v1"
           - name: GENERIC_OPEN_AI_MODEL_PREF
             value: "qwen3-vl-8b"
           - name: GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT
@@ -36,8 +39,13 @@ spec:
           - name: GENERIC_OPEN_AI_API_KEY
             valueFrom:
               secretKeyRef:
-                name: model-api-tokens
-                key: GENERIC_OPEN_AI_API_KEY
+                name: litellm-consumer
+                key: LITELLM_API_KEY
+          - name: JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: anythingllm-admin
+                key: JWT_SECRET
           - name: VECTOR_DB
             value: "lancedb"
           - name: DISABLE_TELEMETRY
@@ -57,6 +65,12 @@ spec:
         
         chromadb:
           enabled: false
+
+        # gp3-csi (EBS) PVCs are ReadWriteOnce — only one node can attach the volume at a
+        # time. The default RollingUpdate strategy starts a new pod before terminating the
+        # old one, causing a permanent deadlock. Recreate terminates the old pod first.
+        strategy:
+          type: Recreate
   
   destination:
     server: https://kubernetes.default.svc
@@ -67,6 +81,11 @@ spec:
       prune: true
     syncOptions:
       - CreateNamespace=true
+      # Prevent ArgoCD from applying resources whose only diff is in ignoreDifferences
+      # (e.g. PVC spec.volumeName set by Kubernetes after binding). Without this flag,
+      # ignoreDifferences only suppresses the OutOfSync indicator but ArgoCD still
+      # attempts the apply, which the API rejects as immutable — causing a sync loop.
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:

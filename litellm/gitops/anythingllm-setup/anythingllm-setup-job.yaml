@@ -1,0 +1,152 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: anythingllm-setup
+  namespace: demo-apps
+  annotations:
+    # PostSync: runs after all resources in this Application are synced (RBAC ready).
+    argocd.argoproj.io/hook: PostSync
+    # Delete the previous Job before creating a new one so re-syncs always run fresh.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: anythingllm-setup
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: curlimages/curl:8.7.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+
+              ANYTHINGLLM_URL="http://anythingllm.demo-apps.svc:3001"
+
+              # ── Helper: login and export JWT ──────────────────────────────────
+              do_login() {
+                echo "Logging in as ${ANYTHINGLLM_ADMIN_USER}..."
+                LOGIN_HTTP=$(curl -s -o /tmp/login_resp.txt -w "%{http_code}" \
+                  -X POST "${ANYTHINGLLM_URL}/api/request-token" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"username\":\"${ANYTHINGLLM_ADMIN_USER}\",\"password\":\"${ANYTHINGLLM_ADMIN_PASSWORD}\"}")
+                if [ "${LOGIN_HTTP}" != "200" ]; then
+                  echo "ERROR: Login failed (HTTP ${LOGIN_HTTP}):"
+                  cat /tmp/login_resp.txt
+                  exit 1
+                fi
+                JWT=$(cat /tmp/login_resp.txt | grep -o '"token":"[^"]*"' | sed 's/"token":"//;s/"//')
+                if [ -z "${JWT}" ]; then
+                  echo "ERROR: Could not extract JWT from login response:"
+                  cat /tmp/login_resp.txt
+                  exit 1
+                fi
+                echo "Login successful."
+              }
+
+              # ── Wait for AnythingLLM initial readiness ────────────────────────
+              echo "Waiting for AnythingLLM to be ready..."
+              ATTEMPTS=0
+              until curl -sf "${ANYTHINGLLM_URL}/api/ping" 2>/dev/null | grep -q '"online"'; do
+                ATTEMPTS=$((ATTEMPTS + 1))
+                if [ "${ATTEMPTS}" -ge 36 ]; then
+                  echo "ERROR: AnythingLLM did not become ready after 6 minutes."
+                  exit 1
+                fi
+                echo "  attempt ${ATTEMPTS}/36 — retrying in 10s..."
+                sleep 10
+              done
+              echo "AnythingLLM is ready."
+
+              # ── Multi-user mode: enable or verify ─────────────────────────────
+              # GET /api/system/multi-user-mode is accessible without auth and
+              # returns { "multiUserMode": bool }.
+              echo "Checking multi-user mode status..."
+              MULTI_RESP=$(curl -s "${ANYTHINGLLM_URL}/api/system/multi-user-mode" \
+                -H "Content-Type: application/json")
+              IS_MULTI=$(echo "${MULTI_RESP}" | grep -o '"multiUserMode":[a-z]*' | sed 's/"multiUserMode"://' || echo "false")
+              echo "  multiUserMode=${IS_MULTI}"
+
+              if [ "${IS_MULTI}" = "true" ]; then
+                echo "Multi-user mode already enabled — logging in."
+                do_login
+              else
+                # POST /api/system/enable-multi-user creates the first admin user
+                # AND enables multi-user mode in a single call (no prior auth needed).
+                echo "Enabling multi-user mode and creating admin user..."
+                ENABLE_HTTP=$(curl -s -o /tmp/enable_resp.txt -w "%{http_code}" \
+                  -X POST "${ANYTHINGLLM_URL}/api/system/enable-multi-user" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"username\":\"${ANYTHINGLLM_ADMIN_USER}\",\"password\":\"${ANYTHINGLLM_ADMIN_PASSWORD}\"}")
+                if [ "${ENABLE_HTTP}" != "200" ] && [ "${ENABLE_HTTP}" != "201" ]; then
+                  echo "ERROR: enable-multi-user failed (HTTP ${ENABLE_HTTP}):"
+                  cat /tmp/enable_resp.txt
+                  exit 1
+                fi
+                echo "Multi-user mode enabled."
+                do_login
+              fi
+
+              # ── Idempotency check ────────────────────────────────────────────
+              echo "Checking for existing workspaces..."
+              WORKSPACES=$(curl -sf "${ANYTHINGLLM_URL}/api/workspaces" \
+                -H "Authorization: Bearer ${JWT}" \
+                -H "Content-Type: application/json" || echo '{"workspaces":[]}')
+
+              WORK_MODEL=$(echo "${WORKSPACES}" | grep -o '"slug":"work"[^}]*"chatModel":"[^"]*"' | grep -o '"chatModel":"[^"]*"' | sed 's/"chatModel":"//;s/"//' || true)
+              THINK_MODEL=$(echo "${WORKSPACES}" | grep -o '"slug":"thinking"[^}]*"chatModel":"[^"]*"' | grep -o '"chatModel":"[^"]*"' | sed 's/"chatModel":"//;s/"//' || true)
+
+              if [ "${WORK_MODEL}" = "qwen3-vl-8b" ] && [ "${THINK_MODEL}" = "qwen35-27b-fp8" ]; then
+                echo "Both workspaces already configured correctly — skipping setup."
+                exit 0
+              fi
+
+              # ── Create and configure workspaces ───────────────────────────────
+              create_workspace() {
+                NAME="$1"
+                MODEL="$2"
+                SLUG="$3"
+
+                echo "Creating workspace '${NAME}'..."
+                CREATE_HTTP=$(curl -s -o /tmp/ws_create_resp.txt -w "%{http_code}" \
+                  -X POST "${ANYTHINGLLM_URL}/api/workspace/new" \
+                  -H "Authorization: Bearer ${JWT}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"${NAME}\"}")
+                if [ "${CREATE_HTTP}" != "200" ] && [ "${CREATE_HTTP}" != "201" ]; then
+                  echo "ERROR: Failed to create workspace '${NAME}' (HTTP ${CREATE_HTTP}):"
+                  cat /tmp/ws_create_resp.txt
+                  exit 1
+                fi
+                echo "  Workspace '${NAME}' created (or already existed)."
+
+                echo "Configuring workspace '${NAME}' with model '${MODEL}'..."
+                UPDATE_HTTP=$(curl -s -o /tmp/ws_update_resp.txt -w "%{http_code}" \
+                  -X POST "${ANYTHINGLLM_URL}/api/workspace/${SLUG}/update" \
+                  -H "Authorization: Bearer ${JWT}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"chatProvider\":\"generic-openai\",\"chatModel\":\"${MODEL}\"}")
+                if [ "${UPDATE_HTTP}" != "200" ]; then
+                  echo "ERROR: Failed to configure workspace '${NAME}' (HTTP ${UPDATE_HTTP}):"
+                  cat /tmp/ws_update_resp.txt
+                  exit 1
+                fi
+                echo "  Workspace '${NAME}' configured with model '${MODEL}'."
+              }
+
+              create_workspace "work" "qwen3-vl-8b" "work"
+              create_workspace "thinking" "qwen35-27b-fp8" "thinking"
+
+              echo "Done. AnythingLLM is in multi-user mode with workspaces 'work' and 'thinking' ready."
+          env:
+            - name: ANYTHINGLLM_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: anythingllm-admin
+                  key: ANYTHINGLLM_ADMIN_USER
+            - name: ANYTHINGLLM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: anythingllm-admin
+                  key: ANYTHINGLLM_ADMIN_PASSWORD

@@ -21,12 +21,15 @@ This demo add-on assumes the main `anythingllm-generic` demo is already deployed
 - ESO is deployed and the `model-api-tokens` Secret exists in `demo-apps`
 - Both RHOAI InferenceServices (`qwen3-vl-8b`, `qwen35-27b-fp8`) are ready in the `demo` namespace
 
-## Pre-flight: Create the Master Key Secret
+## Pre-flight: Create Required Secrets
 
-The deployment reads `LITELLM_MASTER_KEY` **and** `POSTGRES_PASSWORD` from a Kubernetes Secret named `litellm-master-key` in the `demo-apps` namespace. **Both values must be present before you run `oc apply`.** If the secret is absent the LiteLLM pod will fail to start with a `CreateContainerConfigError`, blocking the deployment until the secret is in place.
+Two secrets must exist in `demo-apps` before running `oc apply`. Both are managed outside of GitOps (like cluster credentials) and should never be committed to the repo.
+
+### 1. LiteLLM Master Key (`litellm-master-key`)
+
+The deployment reads `LITELLM_MASTER_KEY` **and** `POSTGRES_PASSWORD` from this secret. If absent the LiteLLM pod will fail to start with a `CreateContainerConfigError`.
 
 ```bash
-# Generate a random master key and database password, then create the secret
 LITELLM_MASTER_KEY="sk-$(openssl rand -hex 16)"
 POSTGRES_PASSWORD="$(openssl rand -hex 16)"
 
@@ -37,6 +40,29 @@ oc create secret generic litellm-master-key \
 ```
 
 > **Keep these values private.** `LITELLM_MASTER_KEY` grants full admin access to the LiteLLM dashboard and key-management API. Downstream consumers (e.g. AnythingLLM) **never** receive this key — they get a scoped virtual key instead (see below).
+
+### 2. AnythingLLM Admin Credentials (`anythingllm-admin`)
+
+The `anythingllm-setup` PostSync Job uses these credentials to create the first admin user, enable multi-user mode, and create the demo workspaces. If absent the Job pod will fail to start.
+
+`JWT_SECRET` is also required here. AnythingLLM writes it to an ephemeral `.env` file on first setup, which is lost on pod restarts. Mounting it from this secret ensures session tokens keep working across restarts.
+
+```bash
+ANYTHINGLLM_ADMIN_USER="admin"
+ANYTHINGLLM_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+ANYTHINGLLM_JWT_SECRET="$(openssl rand -hex 32)"
+
+oc create secret generic anythingllm-admin \
+  --namespace demo-apps \
+  --from-literal=ANYTHINGLLM_ADMIN_USER="${ANYTHINGLLM_ADMIN_USER}" \
+  --from-literal=ANYTHINGLLM_ADMIN_PASSWORD="${ANYTHINGLLM_ADMIN_PASSWORD}" \
+  --from-literal=JWT_SECRET="${ANYTHINGLLM_JWT_SECRET}"
+
+# Save the password — you will need it to log in to the AnythingLLM UI
+echo "AnythingLLM admin password: ${ANYTHINGLLM_ADMIN_PASSWORD}"
+```
+
+> The job is idempotent: on re-syncs it detects that the admin already exists, logs in with the stored credentials, and skips creation steps that have already been completed.
 
 ## How Consumer Access Works
 
@@ -52,7 +78,7 @@ Downstream applications mount `litellm-consumer` to get `LITELLM_API_KEY` and `L
 
 ## Deployment
 
-1. Create the `litellm-master-key` secret as described above.
+1. Create the `litellm-master-key` and `anythingllm-admin` secrets as described above.
 2. Apply the bootstrap Application:
 
 ```bash
@@ -60,7 +86,7 @@ Downstream applications mount `litellm-consumer` to get `LITELLM_API_KEY` and `L
 oc apply -f litellm/gitops/litellm-bootstrap.yaml
 ```
 
-ArgoCD will sync in waves starting at wave 41, after the existing ESO secrets (wave 35) are ready.
+ArgoCD will sync in waves starting at wave 41, after the existing ESO secrets (wave 35) are ready. AnythingLLM deploys at wave 46, after the `litellm-consumer` Secret is written at wave 45, so the pod always starts with its LiteLLM API key present.
 
 ## How It Works
 
@@ -109,9 +135,13 @@ litellm/
 │   │   └── applications/
 │   │       └── apps/
 │   │           ├── litellm.yaml                  # ArgoCD Application → litellm-on-ocp Helm chart
-│   │           └── litellm-consumer-setup.yaml   # ArgoCD Application → consumer-key-setup/
-│   └── consumer-key-setup/
-│       ├── rbac.yaml                             # SA, Role, RoleBinding for the key-setup Job
-│       └── consumer-key-job.yaml                 # PostSync Job: /key/generate → litellm-consumer Secret
+│   │           ├── litellm-consumer-setup.yaml   # ArgoCD Application → consumer-key-setup/ (wave 45)
+│   │           └── litellm-anythingllm-setup.yaml # ArgoCD Application → anythingllm-setup/ (wave 50)
+│   ├── consumer-key-setup/
+│   │   ├── rbac.yaml                             # SA, Role, RoleBinding for the key-setup Job
+│   │   └── consumer-key-job.yaml                 # PostSync Job: /key/generate → litellm-consumer Secret
+│   └── anythingllm-setup/
+│       ├── rbac.yaml                             # SA, Role, RoleBinding for the setup Job
+│       └── anythingllm-setup-job.yaml            # PostSync Job: admin setup, multi-user mode, workspaces
 └── README.md
 ```

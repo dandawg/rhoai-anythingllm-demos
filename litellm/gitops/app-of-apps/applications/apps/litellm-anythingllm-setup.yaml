@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litellm-anythingllm-setup
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: litellm-anythingllm-setup
+    app.kubernetes.io/part-of: rhoai-demos
+  annotations:
+    # Wave 50: runs after litellm-consumer-setup (wave 45) has written the
+    # litellm-consumer Secret. The Job restarts AnythingLLM and creates workspaces.
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  project: rhoai-applications
+
+  source:
+    repoURL: https://github.com/dandawg/rhoai-anythingllm-demos.git
+    targetRevision: main
+    path: litellm/gitops/anythingllm-setup
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo-apps
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
