@@ -3,3 +3,28 @@ kind: ServiceAccount
 metadata:
   name: anythingllm-setup
   namespace: demo-apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: anythingllm-setup
+  namespace: demo-apps
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["anythingllm-admin"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: anythingllm-setup
+  namespace: demo-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: anythingllm-setup
+subjects:
+  - kind: ServiceAccount
+    name: anythingllm-setup
+    namespace: demo-apps

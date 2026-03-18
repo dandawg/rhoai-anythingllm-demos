@@ -40,8 +40,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: anythingllm-signup-config
-            - secretRef:
-                name: anythingllm-signup-secret
+          env:
+            - name: ANYTHINGLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anythingllm-admin
+                  key: ANYTHINGLLM_API_KEY
           resources:
 {{ toYaml .Values.resources | indent 12 }}
           readinessProbe:

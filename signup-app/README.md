@@ -27,39 +27,15 @@ Browser → React UI (static) ─┐
 ## Prerequisites
 
 - OpenShift 4.x cluster with OpenShift GitOps (ArgoCD) installed
-- AnythingLLM deployed and running in the `demo-apps` namespace
-- **Multi-user mode enabled** in AnythingLLM (`Settings → Security → Enable multi-user mode`)
-- An AnythingLLM admin API key (see below)
+- AnythingLLM deployed and running in the `demo-apps` namespace with the `anythingllm-setup` job having run at least once (this enables multi-user mode and generates the admin API key automatically)
+- The `anythingllm-admin` secret present in `demo-apps` (created as part of the litellm setup)
 - `oc` CLI logged in as cluster admin
 
----
-
-## Step 1 — Enable Multi-User Mode & Create an API Key
-
-> These steps are performed once in the AnythingLLM UI.
-
-1. Open AnythingLLM and go to **Settings → Security**.
-2. Enable **Multi-User Mode** and set an admin password if prompted.
-3. Go to **Settings → API Keys** and click **Generate New API Key**.
-4. Copy the key — you will need it in the next step.
-
-See the [AnythingLLM API docs](https://docs.useanything.com/features/api) for more detail.
+> **No manual API key creation needed.** The `anythingllm-setup` job automatically generates an API key and saves it to the `anythingllm-admin` secret under the `ANYTHINGLLM_API_KEY` key. The signup app reads it directly from there.
 
 ---
 
-## Step 2 — Create the Secret
-
-Create the secret in the `demo-apps` namespace **before** deploying:
-
-```bash
-oc create secret generic anythingllm-signup-secret \
-  --from-literal=ANYTHINGLLM_API_KEY=<your-api-key> \
-  -n demo-apps
-```
-
----
-
-## Step 3 — Configure the GitOps Application
+## Step 1 — Configure the GitOps Application
 
 Edit [`gitops/signup-app.yaml`](gitops/signup-app.yaml) and set the following values under `spec.source.helm.values`:
 
@@ -87,7 +63,7 @@ helm:
 
 ---
 
-## Step 4 — Deploy (Single Command)
+## Step 2 — Deploy (Single Command)
 
 ```bash
 oc apply -f signup-app/gitops/signup-app.yaml
@@ -113,7 +89,7 @@ argocd app create anythingllm-signup-app \
   --upsert
 ```
 
-The `--upsert` flag creates the Application if it doesn't exist, or updates it in place if it does. `--helm-set` values override `values.yaml` without touching the file. Note that the `anythingllm-signup-secret` must still be created manually before deploying (see [Step 2](#step-2--create-the-secret)).
+The `--upsert` flag creates the Application if it doesn't exist, or updates it in place if it does. `--helm-set` values override `values.yaml` without touching the file. Ensure the `anythingllm-setup` job has run at least once before deploying so that the `ANYTHINGLLM_API_KEY` is present in the `anythingllm-admin` secret.
 
 ArgoCD will:
 1. Create the ImageStream and BuildConfig (sync wave 1–2)
@@ -219,11 +195,7 @@ To remove the signup app from the cluster:
 oc delete application anythingllm-signup-app -n openshift-gitops
 ```
 
-This cascades and deletes all associated resources (Deployment, Service, Route, BuildConfig, ConfigMap, ImageStream). The `anythingllm-signup-secret` is not managed by ArgoCD and must be deleted separately if desired:
-
-```bash
-oc delete secret anythingllm-signup-secret -n demo-apps
-```
+This cascades and deletes all associated resources (Deployment, Service, Route, BuildConfig, ConfigMap, ImageStream).
 
 > **Note:** Due to OpenShift build lifecycle, the `BuildConfig`, `ImageStream`, and `Build` objects may be left behind if a build is in progress or recently failed when the application is deleted. Clean them up manually if needed:
 >
