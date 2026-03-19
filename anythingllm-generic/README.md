@@ -8,22 +8,15 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
   - **g6e.2xlarge** GPU node (1x NVIDIA L40S, 48GB VRAM, ~$2.24/hr) — for qwen3-vl-8b LLM and FLUX.2-klein-9B (optional)
   - **g6.2xlarge** GPU node (1x NVIDIA L4, 24GB VRAM, ~$1.10/hr) — spare capacity (MachineSet deployed at scale 0; scale up for FLUX.2 add-on)
   - **m6a.4xlarge** CPU node (16 vCPU, 64GB RAM, ~$0.69/hr) — for RHOAI pod support
-- RHOAI platform with dependencies (NFD, NVIDIA GPU Operator)
+- RHOAI platform with dependencies (NFD, NVIDIA GPU Operator, LeaderWorkerSet operator, llm-d inference Gateway)
+- Hardware profiles: g6e.2xlarge, g6.2xlarge, and **g6e.12xlarge** (pre-installed via GitOps for llm-d demos)
 - vLLM-Omni serving runtime (general-purpose; supports LLMs and diffusion image generation models)
 - Model serving: qwen3-vl-8b (LLM) + qwen3-vl-embedding-2b (embeddings)
 - External Secrets Operator for automatic token discovery
 - AnythingLLM application pre-configured with model endpoints
 
-**Also available (not deployed by default):**
-- **g6e.12xlarge** GPU node (4x NVIDIA L40S, 192GB total VRAM, 48 vCPU, 384 GiB RAM, ~$10.49/hr) — MachineSet deployed at scale 0; scale up manually for large multi-GPU / tensor-parallel inference workloads
-
-```bash
-# Deploy the 4x L40S node instead of (or in addition to) the default g6e.2xlarge
-./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
-
-# See all available GPU types with specs
-./scripts/deploy-machinesets.sh --list
-```
+**Optional (not deployed by default):**
+- **g6e.12xlarge** GPU node (4x NVIDIA L40S, 192GB total VRAM, 48 vCPU, 384 GiB RAM, ~$10.49/hr) — deploy when demoing Nemotron / llm-d distributed inference
 
 **Optional add-on:** FLUX.2-klein-9B image generation model (requires HuggingFace token — see [Optional Add-ons](#optional-add-ons))
 
@@ -36,7 +29,7 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 ✅ OpenShift GitOps (ArgoCD) installed - Run `../bootstrap.sh` if not installed  
 ✅ Cluster admin access  
 ✅ Available AWS capacity for g6e.2xlarge (GPU) and m6a.4xlarge (CPU) instances  
-✅ For large model workloads: available AWS capacity for g6e.12xlarge (4x L40S, 192GB VRAM, 384 GiB RAM, optional)
+✅ For llm-d / Nemotron demo: available AWS capacity for g6e.12xlarge (4x L40S, 192GB VRAM, 384 GiB RAM) — optional, deploy only when demoing
 
 ### Install OpenShift GitOps (if needed)
 
@@ -156,45 +149,74 @@ Open the URL in your browser and start chatting with your locally-served models!
 
 ## Optional Add-ons
 
-### g6e.12xlarge Multi-GPU Node (4x NVIDIA L40S)
+### Nemotron-3-Nano-30B-A3B-FP8 with llm-d (Distributed Inference Demo)
 
-Adds a `g6e.12xlarge` MachineSet (4x NVIDIA L40S, 192 GiB total VRAM, 48 vCPU, 384 GiB RAM, ~$10.49/hr) for large multi-GPU workloads such as tensor-parallel inference, multi-GPU model sharding, or running multiple large models concurrently.
+Demonstrates [llm-d](https://github.com/llm-d/llm-d) distributed inference on RHOAI using the `g6e.12xlarge` node (4x NVIDIA L40S). The model runs as 2 replicas with tensor parallelism across 2 GPUs each — filling all 4 GPUs and showing llm-d's KV-cache-aware routing between replicas.
 
-This MachineSet is **optional** — it is not deployed when running `./scripts/deploy-machinesets.sh` without parameters. When you explicitly request it with `--gpu-type g6e.12xlarge`, it deploys with **1 replica** by default (a node will be provisioned). To register the MachineSet in ArgoCD without provisioning a node, set `REPLICA_COUNT=0`:
+**What the standard bootstrap already provides for this demo:**
+- `g6e-12xlarge` HardwareProfile (deployed via GitOps in the models layer)
+- LeaderWorkerSet (LWS) operator (deployed as part of `rhoai-dependencies`)
+- `openshift-ai-inference` Gateway for llm-d inference routing (deployed as part of `rhoai-dependencies`)
+
+The only manual steps before demoing are deploying the optional MachineSet and launching the model from the catalog.
+
+#### Step 1: Deploy the g6e.12xlarge MachineSet
 
 ```bash
-# Deploy with 1 node (default)
-./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
-
-# Register at 0 replicas — no node provisioned until you scale up manually
+# Register the MachineSet at 0 replicas (no cost yet)
 REPLICA_COUNT=0 ./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
-```
 
-This applies `gitops/optional/gpu-machineset-g6e-12xlarge.yaml`, injects cluster-specific Helm parameters, and syncs the ArgoCD application.
-
-#### Step 2: Scale Up When Ready (if you used REPLICA_COUNT=0)
-
-If you registered at 0 replicas, scale up when you need the node:
-
-```bash
-# Find the machineset name
+# Immediately before the demo, scale up the node (5-10 minutes to provision)
 oc get machineset -n openshift-machine-api | grep g6e-12xl
-
-# Scale to 1 node (or more as needed)
 oc scale machineset <machineset-name> -n openshift-machine-api --replicas=1
-
-# Wait for the node to be ready (5-10 minutes)
 oc wait --for=condition=Ready nodes -l node.kubernetes.io/instance-type=g6e.12xlarge --timeout=600s
 ```
 
-#### Removing the g6e.12xlarge MachineSet
+> If you want the node live from the start of the demo, skip `REPLICA_COUNT=0` and just run `./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge` (deploys with 1 replica).
 
-Scale down first, then delete the ArgoCD application:
+#### Step 2: Deploy Nemotron from the RHOAI Model Catalog
+
+In the RHOAI dashboard, navigate to **Models → Model catalog** and select **NVIDIA-Nemotron-3-Nano-30B-A3B-FP8**. Use these values:
+
+| Field | Value |
+|-------|-------|
+| Deployment type | Distributed inference with llm-d |
+| Hardware Profile | `AWS g6e.12xlarge (4x NVIDIA L40S)` |
+| Replicas | `2` |
+| GPUs per replica | `2` |
+| Tensor parallelism | `2` |
+
+**vLLM arguments** (enter in the "Additional arguments" field, one per line):
+
+```
+--trust-remote-code
+--kv-cache-dtype=fp8
+--async-scheduling
+--gpu_memory_utilization=0.95
+--max-model-len=262144
+--max-num-seqs=8
+--tensor-parallel-size=2
+```
+
+**Environment variables:**
+
+| Name | Value |
+|------|-------|
+| `VLLM_USE_FLASHINFER_MOE_FP8` | `1` |
+| `VLLM_FLASHINFER_MOE_BACKEND` | `throughput` |
+| `VLLM_ALLOW_LONG_MAX_MODEL_LEN` | `1` |
+
+**Resource limits per replica pod:** 8 CPU / 64Gi memory / 2 GPUs (requests); 16 CPU / 128Gi / 2 GPUs (limits).
+
+> For full deployment details and troubleshooting, see the [rhoai-model-serving README](https://github.com/dandawg/rhoai-model-serving/blob/main/README.md#deploying-nemotron-3-nano-30b-a3b-fp8-with-llm-d).
+
+#### After the Demo: Scale Down
 
 ```bash
 oc scale machineset <machineset-name> -n openshift-machine-api --replicas=0
-oc delete application gpu-machineset-g6e-12xlarge -n openshift-gitops
 ```
+
+The MachineSet remains in ArgoCD (replica drift is ignored by `ignoreDifferences`) so the next demo only needs `oc scale ... --replicas=1`.
 
 ---
 
