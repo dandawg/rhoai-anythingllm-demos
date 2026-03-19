@@ -64,7 +64,7 @@ cd anythingllm-generic
 # Deploy selectively
 ./scripts/deploy-machinesets.sh --cpu-only
 ./scripts/deploy-machinesets.sh --gpu-type g6e.2xlarge
-./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge   # 4x L40S, ~$10.50/hr
+./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge   # 4x L40S, ~$10.49/hr
 
 # Override specific values if needed
 AVAILABILITY_ZONE=us-east-1b ./scripts/deploy-machinesets.sh
@@ -155,6 +155,48 @@ oc get route anythingllm -n demo-apps -o jsonpath='{.spec.host}'
 Open the URL in your browser and start chatting with your locally-served models!
 
 ## Optional Add-ons
+
+### g6e.12xlarge Multi-GPU Node (4x NVIDIA L40S)
+
+Adds a `g6e.12xlarge` MachineSet (4x NVIDIA L40S, 192 GiB total VRAM, 48 vCPU, 384 GiB RAM, ~$10.49/hr) for large multi-GPU workloads such as tensor-parallel inference, multi-GPU model sharding, or running multiple large models concurrently.
+
+This MachineSet is **optional** — it is not deployed when running `./scripts/deploy-machinesets.sh` without parameters. When you explicitly request it with `--gpu-type g6e.12xlarge`, it deploys with **1 replica** by default (a node will be provisioned). To register the MachineSet in ArgoCD without provisioning a node, set `REPLICA_COUNT=0`:
+
+```bash
+# Deploy with 1 node (default)
+./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
+
+# Register at 0 replicas — no node provisioned until you scale up manually
+REPLICA_COUNT=0 ./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
+```
+
+This applies `gitops/optional/gpu-machineset-g6e-12xlarge.yaml`, injects cluster-specific Helm parameters, and syncs the ArgoCD application.
+
+#### Step 2: Scale Up When Ready (if you used REPLICA_COUNT=0)
+
+If you registered at 0 replicas, scale up when you need the node:
+
+```bash
+# Find the machineset name
+oc get machineset -n openshift-machine-api | grep g6e-12xl
+
+# Scale to 1 node (or more as needed)
+oc scale machineset <machineset-name> -n openshift-machine-api --replicas=1
+
+# Wait for the node to be ready (5-10 minutes)
+oc wait --for=condition=Ready nodes -l node.kubernetes.io/instance-type=g6e.12xlarge --timeout=600s
+```
+
+#### Removing the g6e.12xlarge MachineSet
+
+Scale down first, then delete the ArgoCD application:
+
+```bash
+oc scale machineset <machineset-name> -n openshift-machine-api --replicas=0
+oc delete application gpu-machineset-g6e-12xlarge -n openshift-gitops
+```
+
+---
 
 ### FLUX.2-klein-9B Image Generation Model
 

@@ -41,7 +41,7 @@ print_usage() {
   echo "  $0                              # Deploy all machinesets (CPU + default GPU types)"
   echo "  $0 --cpu-only                   # Deploy only CPU"
   echo "  $0 --gpu-type g6e.2xlarge       # Deploy only g6e.2xlarge GPU"
-  echo "  $0 --gpu-type g6e.12xlarge      # Deploy only g6e.12xlarge GPU (4x L40S)"
+  echo "  $0 --gpu-type g6e.12xlarge      # Deploy g6e.12xlarge GPU (4x L40S, 1 replica by default)"
   echo "  $0 --gpu-type g6.2xlarge        # Deploy only g6 GPU (0 replicas, for FLUX.2 add-on)"
   echo "  REPLICA_COUNT=2 $0              # Deploy with 2 replicas each"
   echo "  $0 --list                       # Show available GPU types"
@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# If GPU types specified, use those; otherwise deploy all
+# If GPU types specified, use those; otherwise deploy default GPU types only (g6e.12xlarge is optional)
 if [ ${#GPU_TYPES[@]} -eq 0 ]; then
   GPU_TYPES=("g6e.2xlarge" "g6.2xlarge")
 fi
@@ -260,13 +260,12 @@ if [ "$DEPLOY_GPU" = true ]; then
           "g6e"
         ;;
       "g6e.12xlarge")
-        # Deployed at 0 replicas by default; scale up manually for large multi-GPU workloads
+        # Uses REPLICA_COUNT (default 1) when explicitly requested via --gpu-type; use REPLICA_COUNT=0 to register at 0 replicas
         deploy_machineset \
           "gpu-machineset-g6e-12xlarge" \
-          "$REPO_ROOT/anythingllm-generic/gitops/app-of-apps/applications/infrastructure/gpu-machineset-g6e-12xlarge.yaml" \
+          "$REPO_ROOT/anythingllm-generic/gitops/optional/gpu-machineset-g6e-12xlarge.yaml" \
           "g6e.12xlarge" \
-          "g6e-12xl" \
-          "0"
+          "g6e-12xl"
         ;;
       "g6.2xlarge")
         # Deployed at 0 replicas by default; scale up manually when using the FLUX.2 optional add-on
