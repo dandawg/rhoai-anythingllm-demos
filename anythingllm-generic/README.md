@@ -29,7 +29,7 @@ GitOps deployment of AnythingLLM with RHOAI model serving on OpenShift.
 ✅ OpenShift GitOps (ArgoCD) installed - Run `../bootstrap.sh` if not installed  
 ✅ Cluster admin access  
 ✅ Available AWS capacity for g6e.2xlarge (GPU) and m6a.4xlarge (CPU) instances  
-✅ For llm-d / Nemotron demo: available AWS capacity for g6e.12xlarge (4x L40S, 192GB VRAM, 384 GiB RAM) — optional, deploy only when demoing
+✅ For llm-d / Nemotron demo: available AWS capacity for g6e.12xlarge (4x L40S, 192GB VRAM, 384 GiB RAM) — optional, deploy when demoing
 
 ### Install OpenShift GitOps (if needed)
 
@@ -166,7 +166,7 @@ The only manual steps before demoing are deploying the optional MachineSet and l
 # Register the MachineSet at 0 replicas (no cost yet)
 REPLICA_COUNT=0 ./scripts/deploy-machinesets.sh --gpu-type g6e.12xlarge
 
-# Immediately before the demo, scale up the node (5-10 minutes to provision)
+# Before use, scale up the node (5-10 minutes to provision)
 oc get machineset -n openshift-machine-api | grep g6e-12xl
 oc scale machineset <machineset-name> -n openshift-machine-api --replicas=1
 oc wait --for=condition=Ready nodes -l node.kubernetes.io/instance-type=g6e.12xlarge --timeout=600s
@@ -190,6 +190,7 @@ In the RHOAI dashboard, navigate to **Models → Model catalog** and select **NV
 
 ```
 --trust-remote-code
+--disable-uvicorn-access-log
 --kv-cache-dtype=fp8
 --async-scheduling
 --gpu_memory_utilization=0.95
@@ -202,11 +203,21 @@ In the RHOAI dashboard, navigate to **Models → Model catalog** and select **NV
 
 | Name | Value |
 |------|-------|
-| `VLLM_USE_FLASHINFER_MOE_FP8` | `1` |
-| `VLLM_FLASHINFER_MOE_BACKEND` | `throughput` |
 | `VLLM_ALLOW_LONG_MAX_MODEL_LEN` | `1` |
 
+> Do **not** set `VLLM_USE_FLASHINFER_MOE_FP8` / `VLLM_FLASHINFER_MOE_BACKEND` on the stock RHOAI vLLM image unless NVIDIA documents a prebuilt path for your release — they can trigger JIT compilation that requires `cublasLt.h` (CUDA dev headers), which the default image does not include. See troubleshooting in the [rhoai-model-serving README](https://github.com/dandawg/rhoai-model-serving/blob/main/README.md#troubleshooting-nemotron--llm-d).
+
 **Resource limits per replica pod:** 8 CPU / 64Gi memory / 2 GPUs (requests); 16 CPU / 128Gi / 2 GPUs (limits).
+
+**Openshift AI GenAI Studio Access** To test models in the GenAI Studio Playground, you will need to enable this at model deployment time by checking the box "Add as AI asset endpoint" under the header "Model playground availability" in the "Advanced settings" section.
+
+Since the GenAI Studio is still in Tech Preview, you may also need to enable it so that it appears in the Openshift AI Dashboard. You can do this by patching the dashboard config custom resource:
+```
+oc patch OdhDashboardConfig odh-dashboard-config -n redhat-ods-applications --type='merge' -p '{"spec": {"dashboardConfig": {"genAiStudio": true}}}'
+```
+
+You may need to wait ~1 minute for the dashboard to update and show the GenAI Studio tab.
+
 
 > For full deployment details and troubleshooting, see the [rhoai-model-serving README](https://github.com/dandawg/rhoai-model-serving/blob/main/README.md#deploying-nemotron-3-nano-30b-a3b-fp8-with-llm-d).
 

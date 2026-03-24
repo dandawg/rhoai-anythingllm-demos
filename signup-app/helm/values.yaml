@@ -16,6 +16,12 @@ anythingllmRouteName: "anythingllm"
 # Set explicitly only if you need to override the auto-discovered value.
 anythingllmExternalUrl: ""
 
+# AnythingLLM workspace chatModel values for signup (LiteLLM-exposed ids; same API base as the instance).
+signupQwenChatModel: "qwen3-vl-8b"
+signupNemoChatModel: "nemotron-3-30b-a3b-fp8"
+# Optional: e.g. generic-openai — omit (empty) to only set chatModel on workspace update
+signupChatProvider: ""
+
 # Git repository settings for the OpenShift BuildConfig
 git:
   repoURL: "https://github.com/dandawg/rhoai-anythingllm-demos.git"

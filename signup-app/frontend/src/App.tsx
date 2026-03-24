@@ -13,7 +13,7 @@ export interface QuotaInfo {
 interface SignupResult {
   success: boolean
   username: string
-  workspaceName: string
+  workspaceNames: string[]
   anythingllmUrl: string
 }
 
@@ -65,9 +65,13 @@ function SuccessView({ result }: { result: SignupResult }) {
       <div className="success-icon" aria-hidden="true">✓</div>
       <h2 className="success-title">You're all set!</h2>
       <p className="success-body">
-        Welcome, <strong>{result.username}</strong>! Your personal workspace{' '}
-        <strong>"{result.workspaceName}"</strong> has been created and is ready to use.
+        Welcome, <strong>{result.username}</strong>! Your workspaces are ready:
       </p>
+      <ul className="success-workspaces">
+        {result.workspaceNames.map(name => (
+          <li key={name}><strong>{name}</strong></li>
+        ))}
+      </ul>
       {result.anythingllmUrl ? (
         <a
           href={result.anythingllmUrl}

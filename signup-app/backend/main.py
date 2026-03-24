@@ -3,6 +3,7 @@ import re
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -18,6 +19,12 @@ ANYTHINGLLM_API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "")
 ANYTHINGLLM_EXTERNAL_URL = os.getenv("ANYTHINGLLM_EXTERNAL_URL", "")
 ANYTHINGLLM_ROUTE_NAME = os.getenv("ANYTHINGLLM_ROUTE_NAME", "anythingllm")
 USER_QUOTA = int(os.getenv("USER_QUOTA", "30"))
+
+# LiteLLM / OpenAI-compatible model ids per signup workspace (same API base + key, different model name)
+SIGNUP_QWEN_CHAT_MODEL = os.getenv("SIGNUP_QWEN_CHAT_MODEL", "qwen3-vl-8b").strip()
+SIGNUP_NEMO_CHAT_MODEL = os.getenv("SIGNUP_NEMO_CHAT_MODEL", "nemotron-3-30b-a3b-fp8").strip()
+_cp = os.getenv("SIGNUP_CHAT_PROVIDER", "").strip()
+SIGNUP_CHAT_PROVIDER: str | None = _cp if _cp else None
 
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{3,32}$")
 
@@ -67,15 +74,70 @@ def allm_headers() -> dict:
     }
 
 
+async def _provision_user_workspace(
+    client: httpx.AsyncClient,
+    user_id: int,
+    workspace_name: str,
+    chat_model: str,
+) -> None:
+    """Create a workspace, assign the user, and set workspace chatModel (optional chatProvider)."""
+    ws_resp = await client.post(
+        f"{ANYTHINGLLM_URL}/api/v1/workspace/new",
+        headers=allm_headers(),
+        json={"name": workspace_name},
+    )
+    if ws_resp.status_code != 200 or not ws_resp.json().get("workspace"):
+        logger.error("Workspace creation failed for %r: %s", workspace_name, ws_resp.text)
+        raise HTTPException(
+            status_code=500,
+            detail="User created but workspace creation failed. Please contact the presenter.",
+        )
+
+    workspace = ws_resp.json()["workspace"]
+    workspace_slug = workspace["slug"]
+    logger.info("Created workspace '%s' (slug=%s)", workspace_name, workspace_slug)
+
+    assign_resp = await client.post(
+        f"{ANYTHINGLLM_URL}/api/v1/admin/workspaces/{workspace_slug}/manage-users",
+        headers=allm_headers(),
+        json={"userIds": [user_id], "reset": False},
+    )
+    if assign_resp.status_code != 200:
+        logger.warning(
+            "Workspace assignment returned %d for workspace %r (user id=%d)",
+            assign_resp.status_code,
+            workspace_name,
+            user_id,
+        )
+
+    body: dict = {"chatModel": chat_model}
+    if SIGNUP_CHAT_PROVIDER:
+        body["chatProvider"] = SIGNUP_CHAT_PROVIDER
+    safe_slug = quote(workspace_slug, safe="")
+    upd = await client.post(
+        f"{ANYTHINGLLM_URL}/api/v1/workspace/{safe_slug}/update",
+        headers=allm_headers(),
+        json=body,
+    )
+    if upd.status_code != 200:
+        logger.error("Workspace model update failed for %r: %s", workspace_name, upd.text)
+        raise HTTPException(
+            status_code=500,
+            detail="Workspace was created but model configuration failed. Please contact the presenter.",
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _anythingllm_external_url
     # Prefer explicit env var; fall back to live route discovery
     _anythingllm_external_url = ANYTHINGLLM_EXTERNAL_URL or _discover_route_url()
     logger.info(
-        "Startup: ANYTHINGLLM_URL=%s  USER_QUOTA=%d  external_url=%s",
+        "Startup: ANYTHINGLLM_URL=%s  USER_QUOTA=%d  qwen_model=%s  nemo_model=%s  external_url=%s",
         ANYTHINGLLM_URL,
         USER_QUOTA,
+        SIGNUP_QWEN_CHAT_MODEL,
+        SIGNUP_NEMO_CHAT_MODEL,
         _anythingllm_external_url or "(not set — link will not be shown)",
     )
     yield
@@ -165,8 +227,8 @@ async def signup(req: SignupRequest):
       2. Username not already taken
     Then:
       3. Creates user
-      4. Creates personal workspace
-      5. Assigns user to workspace
+      4. Creates <username>-qwen3 workspace (Qwen chat model)
+      5. Creates <username>-nemo3 workspace (Nemotron chat model)
     """
     async with httpx.AsyncClient(timeout=15.0) as client:
         # --- Step 1 & 2: fetch user list for quota + username checks ---
@@ -211,39 +273,16 @@ async def signup(req: SignupRequest):
         user_id = create_resp.json()["user"]["id"]
         logger.info("Created user '%s' (id=%d)", req.username, user_id)
 
-        # --- Step 4: Create personal workspace ---
-        workspace_name = f"{req.username}'s Workspace"
-        ws_resp = await client.post(
-            f"{ANYTHINGLLM_URL}/api/v1/workspace/new",
-            headers=allm_headers(),
-            json={"name": workspace_name},
-        )
-        if ws_resp.status_code != 200 or not ws_resp.json().get("workspace"):
-            logger.error("Workspace creation failed: %s", ws_resp.text)
-            raise HTTPException(
-                status_code=500,
-                detail="User created but workspace creation failed. Please contact the presenter.",
-            )
-
-        workspace = ws_resp.json()["workspace"]
-        workspace_slug = workspace["slug"]
-        logger.info("Created workspace '%s' (slug=%s)", workspace_name, workspace_slug)
-
-        # --- Step 5: Assign user to workspace ---
-        assign_resp = await client.post(
-            f"{ANYTHINGLLM_URL}/api/v1/admin/workspaces/{workspace_slug}/manage-users",
-            headers=allm_headers(),
-            json={"userIds": [user_id], "reset": False},
-        )
-        if assign_resp.status_code != 200:
-            logger.warning(
-                "Workspace assignment returned %d for user %s", assign_resp.status_code, req.username
-            )
+        # --- Step 4 & 5: Two workspaces (same LLM endpoint/key; different chatModel) ---
+        w_qwen = f"{req.username}-qwen3"
+        w_nemo = f"{req.username}-nemo3"
+        await _provision_user_workspace(client, user_id, w_qwen, SIGNUP_QWEN_CHAT_MODEL)
+        await _provision_user_workspace(client, user_id, w_nemo, SIGNUP_NEMO_CHAT_MODEL)
 
         return {
             "success": True,
             "username": req.username,
-            "workspaceName": workspace_name,
+            "workspaceNames": [w_qwen, w_nemo],
             "anythingllmUrl": _anythingllm_external_url,
         }
 

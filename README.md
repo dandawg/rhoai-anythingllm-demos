@@ -59,6 +59,10 @@ oc apply -f gitops/anythingllm-bootstrap.yaml
 
 See [anythingllm-generic/README.md](anythingllm-generic/README.md) for detailed documentation.
 
+### OpenShift Dev Spaces (optional)
+
+Standalone operator + `CheCluster` manifests for VS Code (che-code), Python UDI defaults, 10Gi PVCs, and TLS notes for RHOAI: [devspaces/README.md](devspaces/README.md).
+
 ## Available Demos
 
 ### AnythingLLM Generic Demo
@@ -83,6 +87,13 @@ rhoai-anythingllm-demos/
 ├── bootstrap.sh           # GitOps installer script
 ├── bootstrap/             # GitOps operator manifests
 │   └── gitops-operator/
+├── devspaces/             # OpenShift Dev Spaces (optional, oc apply -k)
+│   ├── README.md
+│   ├── operator/          # Subscription
+│   ├── instance/          # CheCluster
+│   ├── optional/          # DevWorkspace operator (if needed)
+│   ├── sample/            # Sample devfile
+│   └── tls/               # Extra CA guidance
 └── anythingllm-generic/   # Complete demo deployment
     ├── README.md          # Detailed deployment guide
     ├── scripts/

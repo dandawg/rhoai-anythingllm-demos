@@ -419,6 +419,30 @@ body {
   color: var(--text);
 }
 
+.success-workspaces {
+  list-style: none;
+  margin: 0.75rem auto 0;
+  padding: 0;
+  text-align: left;
+  max-width: 320px;
+  width: 100%;
+}
+
+.success-workspaces li {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.success-workspaces li:last-child {
+  border-bottom: none;
+}
+
+.success-workspaces strong {
+  color: var(--text);
+}
+
 .success-hint {
   font-size: 0.875rem;
   color: var(--text-muted);

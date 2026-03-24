@@ -15,8 +15,11 @@ Usage:
   # Preview what would be deleted without making changes
   python cleanup-users.py --exclude admin --dry-run
 
-  # Delete ALL users (no filter — use with caution!)
+  # Delete all non-admin users (admins are kept unless listed with --include)
   python cleanup-users.py --exclude ""
+
+  Users with role "admin" are never deleted in --exclude mode. To remove an
+  admin account, use --include with that admin's username explicitly.
 
 Environment variables (or .env file):
   ANYTHINGLLM_URL      AnythingLLM base URL  (e.g. https://anythingllm-demo-apps.apps.cluster.example.com)
@@ -75,6 +78,10 @@ def list_users(url: str, key: str) -> list[dict]:
 def delete_user(url: str, key: str, user_id: int) -> bool:
     resp = requests.delete(f"{url}/api/v1/admin/users/{user_id}", headers=headers(key), timeout=15)
     return resp.status_code == 200 and resp.json().get("success", False)
+
+
+def is_admin_role(user: dict) -> bool:
+    return str(user.get("role", "")).lower() == "admin"
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +144,15 @@ def main() -> None:
     else:
         exclude_raw = {n.strip().lower() for n in args.exclude.split(",") if n.strip()}
         targets = [u for u in users if u["username"].lower() not in exclude_raw]
+        # Never delete admin-role accounts via --exclude; only --include may target them.
+        before = len(targets)
+        targets = [u for u in targets if not is_admin_role(u)]
+        skipped_admins = before - len(targets)
+        if skipped_admins:
+            print(
+                f"Note: skipping {skipped_admins} admin user(s) "
+                "(use --include <admin-username> to delete an admin explicitly).\n"
+            )
 
     if not targets:
         print("No users matched the filter. Nothing to delete.")

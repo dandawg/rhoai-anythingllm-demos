@@ -233,11 +233,31 @@ python cleanup-users.py --exclude admin,presenter
 # Delete specific users only
 python cleanup-users.py --include alice,bob,charlie
 
-# Delete ALL users (no exclusions)
+# Delete all non-admin users (accounts with role "admin" are always kept)
 python cleanup-users.py --exclude ""
 ```
 
-The script will prompt for confirmation before deleting.
+The script will prompt for confirmation before deleting. **Admin protection:** users with role `admin` are never removed when you use `--exclude` (including `--exclude ""`). To delete an admin account, use `--include` with that username explicitly (for example `python cleanup-users.py --include oldadmin`).
+
+### Workspace cleanup
+
+Same env vars as above. Tokens match a workspace **slug** or **name** exactly (case-insensitive).
+
+```bash
+python cleanup-workspaces.py --exclude work,thinking --dry-run
+python cleanup-workspaces.py --exclude work,thinking
+python cleanup-workspaces.py --include alice-s-workspace,demo-ws
+```
+
+### Create per-user workspaces (shared model name)
+
+Creates a workspace for each selected user, grants them access, and sets `chatModel` to the name you provide (same endpoint/token as the rest of the instance). Optional `--chat-provider` if you must set it explicitly (for example `generic-openai`).
+
+```bash
+python create-user-workspaces.py --model-name qwen3-vl-8b --exclude admin --dry-run
+python create-user-workspaces.py --model-name qwen3-vl-8b --exclude admin
+python create-user-workspaces.py --model-name my-model --include alice,bob --chat-provider generic-openai
+```
 
 ---
 
@@ -316,5 +336,7 @@ signup-app/
 ├── gitops/
 │   └── signup-app.yaml      # ArgoCD Application — the single deploy command target
 └── scripts/
-    └── cleanup-users.py     # Post-demo user cleanup utility
+    ├── cleanup-users.py          # Post-demo user cleanup
+    ├── cleanup-workspaces.py     # Workspace cleanup by slug/name
+    └── create-user-workspaces.py # Per-user workspace + model name
 ```

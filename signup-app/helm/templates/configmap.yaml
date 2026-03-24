@@ -19,3 +19,6 @@ data:
   ANYTHINGLLM_URL: {{ .Values.anythingllmUrl | quote }}
   ANYTHINGLLM_EXTERNAL_URL: {{ $externalUrl | quote }}
   ANYTHINGLLM_ROUTE_NAME: {{ .Values.anythingllmRouteName | default "anythingllm" | quote }}
+  SIGNUP_QWEN_CHAT_MODEL: {{ .Values.signupQwenChatModel | default "qwen3-vl-8b" | quote }}
+  SIGNUP_NEMO_CHAT_MODEL: {{ .Values.signupNemoChatModel | default "nemotron-3-30b-a3b-fp8" | quote }}
+  SIGNUP_CHAT_PROVIDER: {{ .Values.signupChatProvider | default "" | quote }}
