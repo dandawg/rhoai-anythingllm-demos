@@ -26,7 +26,8 @@ app-of-apps/
     │   ├── rhoai-dependencies.yaml    # NFD, Kueue, DCGM
     │   ├── nvidia-gpu-operator.yaml   # NVIDIA GPU Operator
     │   ├── gpu-machineset-g6e-2xlarge.yaml
-    │   └── cpu-machineset-m6a-4xlarge.yaml
+    │   ├── cpu-machineset-m6a-4xlarge.yaml
+    │   └── efs-aws.yaml                  # EFS CSI + RWX StorageClass (openshift-infra chart)
     │
     ├── platform/                       # Platform components
     │   ├── rhoai-operator.yaml        # RHOAI Operator

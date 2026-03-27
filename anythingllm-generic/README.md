@@ -84,6 +84,33 @@ oc wait --for=condition=Ready nodes -l nvidia.com/gpu.present=true --timeout=600
 oc get nodes -l nvidia.com/gpu.present=true
 ```
 
+### Optional: EFS / RWX storage (ReadWriteMany)
+
+Use this when workloads need **RWX** volumes on AWS (e.g. shared storage across pods). It installs the **AWS EFS CSI Driver Operator**, `ClusterCSIDriver` `efs.csi.aws.com`, and a **`StorageClass`** (default `efs-csi`) by syncing the **`efs-aws`** Argo CD app, which pulls the Helm chart from **[openshift-infra](https://github.com/dandawg/openshift-infra)** (`infra/efs/aws/helm`).
+
+From **`anythingllm-generic/`**:
+
+```bash
+# Provisions EFS in the cluster VPC (Job uses openshift-machine-api/aws-cloud-credentials), then syncs efs-aws
+./scripts/deploy-efs.sh
+
+# Or reuse an existing file system
+EFS_FILE_SYSTEM_ID=fs-xxxxxxxx ./scripts/deploy-efs.sh
+
+# Custom StorageClass name
+STORAGE_CLASS_NAME=my-efs ./scripts/deploy-efs.sh
+```
+
+You can run this **before or after** `oc apply -f gitops/anythingllm-bootstrap.yaml`. If the app-of-apps has not been applied yet, the script still creates the `efs-aws` `Application` and sets Helm parameters so the first sync succeeds once Argo CD manages that app.
+
+**Tear down** (removes AWS EFS resources and the StorageClass):
+
+```bash
+EFS_FILE_SYSTEM_ID=fs-xxxxxxxx ./scripts/teardown-efs.sh
+```
+
+Manual steps and troubleshooting: [openshift-infra `infra/efs/aws/README.md`](https://github.com/dandawg/openshift-infra/blob/main/infra/efs/aws/README.md).
+
 ### Step 2: Deploy Application Stack
 
 Once MachineSets are deploying, apply the bootstrap application:
